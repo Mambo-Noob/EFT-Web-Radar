@@ -108,37 +108,8 @@ namespace AncientMountain.Managed.Data
 
         public void DrawESP(SKCanvas canvas, WebRadarPlayer localPlayer, LootUiConfig lootConfig)
         {
-            var dist = Vector3.Distance(localPlayer.Position, Position);
-
-            // Get local player screen position
-            // Assuming the WebRadarPlayer has position and rotation (forward vector)
-            Vector3 playerForward = localPlayer.GetForwardVector(); // You'll need to implement this
-            Vector3 playerUp = Vector3.UnitY; // Assuming Y is up in your world
-
-            // Get screen position coordinates using the existing method
-            Vector2 normalizedScreenPos = GetScreenPosition(
-                localPlayer.Position,
-                playerForward,
-                playerUp,
-                Position,
-                75f, // Typical field of view, adjust as needed
-                16f / 9f // Assuming 16:9 aspect ratio, adjust as needed
-            );
-
-            // Check if the loot is on screen
-            if (!IsOnScreen(normalizedScreenPos))
-            {
-                return; // Don't render if not on screen
-            }
-
-            // Convert to pixel coordinates
-
-            //TODO: Add screen dimensions to UI selector
-            Vector2 scrPos = NormalizedToPixelCoordinates(
-                normalizedScreenPos,
-                2560,
-                1440
-            );
+            //TODO: add screen size option in UI
+            var scrPos = ScreenPositionCalculator.GetItemScreenPosition(localPlayer, this, 1920, 1080, 90).GetValueOrDefault();            
 
             //TODO: Add scale
             var boxHalf = 3.5f * 1;
@@ -166,64 +137,6 @@ namespace AncientMountain.Managed.Data
                 canvas.DrawText(l, screenPos, paint);
                 screenPos.Y += paint.TextSize;
             }
-        }
-
-        public Vector2 GetScreenPosition(
-            Vector3 player1Position,
-            Vector3 player1Forward,
-            Vector3 player1Up,
-            Vector3 player2Position,
-            float fieldOfViewHorizontal,
-            float aspectRatio)
-        {
-            // Create the view coordinate system for player 1
-            Vector3 forward = Vector3.Normalize(player1Forward);
-            Vector3 right = Vector3.Normalize(Vector3.Cross(player1Up, forward));
-            Vector3 up = Vector3.Cross(forward, right);
-
-            // Vector from player 1 to player 2
-            Vector3 toPlayer2 = player2Position - player1Position;
-
-            // Project this vector onto the view plane
-            float forwardDistance = Vector3.Dot(toPlayer2, forward);
-
-            // If the player is behind us, return an off-screen position
-            if (forwardDistance <= 0)
-            {
-                return new Vector2(-2, -2); // Off-screen indicator
-            }
-
-            // Project onto the right and up vectors to get the position in view space
-            float rightAmount = Vector3.Dot(toPlayer2, right);
-            float upAmount = Vector3.Dot(toPlayer2, up);
-
-            // Convert to normalized device coordinates (-1 to 1 range)
-            // Use the horizontal FOV and aspect ratio to calculate
-            float halfFovRadians = (fieldOfViewHorizontal * 0.5f) * (float)(Math.PI / 180f);
-            float tanHalfFov = (float)Math.Tan(halfFovRadians);
-
-            float ndcX = rightAmount / (forwardDistance * tanHalfFov);
-            float ndcY = upAmount / (forwardDistance * tanHalfFov / aspectRatio);
-
-            // Return the normalized screen coordinates (-1 to 1 range)
-            // Where (0,0) is screen center, (-1,-1) is bottom-left, (1,1) is top-right
-            return new Vector2(ndcX, ndcY);
-        }
-
-        // Extension method to check if the position is on screen
-        public bool IsOnScreen(Vector2 screenPosition)
-        {
-            return screenPosition.X >= -1 && screenPosition.X <= 1 &&
-                   screenPosition.Y >= -1 && screenPosition.Y <= 1;
-        }
-
-        // Optionally, convert to pixel coordinates
-        public Vector2 NormalizedToPixelCoordinates(Vector2 normalizedPosition, int screenWidth, int screenHeight)
-        {
-            float pixelX = (normalizedPosition.X + 1) * 0.5f * screenWidth;
-            float pixelY = (1 - (normalizedPosition.Y + 1) * 0.5f) * screenHeight; // Y is flipped in most screen spaces
-
-            return new Vector2(pixelX, pixelY);
         }
 
         private ValueTuple<SKPaint, SKPaint> GetPaints(LootUiConfig lootConfig)
