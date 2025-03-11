@@ -161,7 +161,7 @@ namespace AncientMountain.Managed.Services
                 switch (_sr.ConnectionState)
                 {
                     case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Disconnected:
-                        NotConnectedStatus(canvas, info);
+                        NotConnectedStatus(canvas, info, "ESP");
                         break;
                     case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connected:
                         var data = _sr.Data;
@@ -176,37 +176,8 @@ namespace AncientMountain.Managed.Services
                             localPlayer ??= data.Players.FirstOrDefault();
                             if (localPlayer is null)
                                 break;
-                            var localPlayerPos = localPlayer.Position;
-                            var localPlayerMapPos = localPlayerPos.ToMapPos(map);
-                            var mapParams = GetMapParameters(info, map, localPlayerMapPos); // Map auto follow LocalPlayer
-                            var mapCanvasBounds = new SKRect() // Drawing Destination
-                            {
-                                Left = info.Rect.Left,
-                                Right = info.Rect.Right,
-                                Top = info.Rect.Top,
-                                Bottom = info.Rect.Bottom
-                            };
-                            // Draw Game Map
-                            canvas.DrawImage(map.Image, mapParams.Bounds, mapCanvasBounds, SKPaints.PaintBitmap);
-                            // Draw LocalPlayer
-                            localPlayer.Draw(canvas, info, mapParams, localPlayer);
-                            // Draw other players
-                            var allPlayers = data.Players
-                                .Where(x => !x.HasExfild); // Skip exfil'd players
-                                                           // Draw Players
-                            foreach (var player in allPlayers)
-                            {
-                                if (player == localPlayer)
-                                    continue; // Already drawn local player, move on
-                                player.Draw(canvas, info, mapParams, localPlayer);
-                            }
-                            //TODO: Make this a computed var that can be ran on the UI side as well instead of duplicating code
-                            var loot = data.Loot.Where(x => (string.IsNullOrEmpty(lootWidget.SearchFilter) || x.ShortName.Contains(lootWidget.SearchFilter)) && x.Price > lootWidget.MinPrice
-                            && !lootWidget.ExcludeItems.Contains(x.ShortName));
-                            foreach (var item in loot)
-                            {
-                                item.Draw(canvas, info, mapParams, localPlayer, lootWidget);
-                            }
+                            //TODO: use filtered loot
+                            DrawLoot(canvas, localPlayer, data.Loot, lootWidget);
                         }
                         else
                         {
@@ -226,13 +197,13 @@ namespace AncientMountain.Managed.Services
             canvas.Flush();
         }
 
-        private static void DrawLoot(SKCanvas canvas, WebRadarPlayer localPlayer, IEnumerable<WebRadarLoot> loot)
+        private static void DrawLoot(SKCanvas canvas, WebRadarPlayer localPlayer, IEnumerable<WebRadarLoot> loot, LootUiConfig lootWidget)
         {
             if (loot is not null)
             {
                 foreach (var item in loot)
                 {
-                    item.DrawESP(canvas, localPlayer);
+                    item.DrawESP(canvas, localPlayer, lootWidget);
                 }
             }
         }
@@ -252,9 +223,9 @@ namespace AncientMountain.Managed.Services
             }
         }
 
-        private void NotConnectedStatus(SKCanvas canvas, SKImageInfo info)
+        private void NotConnectedStatus(SKCanvas canvas, SKImageInfo info, string page = "")
         {
-            const string notConnected = "Not Connected!";
+            var notConnected = "Not Connected!" + page;
             float textWidth = SKPaints.TextRadarStatus.MeasureText(notConnected);
             canvas.DrawText(notConnected, (info.Width / 2) - textWidth / 2f, info.Height / 2,
                 SKPaints.TextRadarStatus);
