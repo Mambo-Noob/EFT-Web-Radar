@@ -106,23 +106,66 @@ namespace AncientMountain.Managed.Data
             canvas.DrawText(label, point, paints.Item2);
         }
 
-        public void DrawESP(SKCanvas canvas, WebRadarPlayer localPlayer)
+        public void DrawESP(SKCanvas canvas, WebRadarPlayer localPlayer, LootUiConfig lootConfig)
         {
             var dist = Vector3.Distance(localPlayer.Position, Position);
 
-            //Get local player screen rotation
+            // Get local player screen position
+            // Assuming the WebRadarPlayer has position and rotation (forward vector)
+            Vector3 playerForward = localPlayer.GetForwardVector(); // You'll need to implement this
+            Vector3 playerUp = Vector3.UnitY; // Assuming Y is up in your world
 
-            
-            var boxHalf = 3.5f * ESP.Config.FontScale;
-            var label = GetUILabel(MainForm.Config.QuestHelper.Enabled);
-            var showDist = ESP.Config.ShowDistances || dist <= 10f;
+            // Get screen position coordinates using the existing method
+            Vector2 normalizedScreenPos = GetScreenPosition(
+                localPlayer.Position,
+                playerForward,
+                playerUp,
+                Position,
+                75f, // Typical field of view, adjust as needed
+                16f / 9f // Assuming 16:9 aspect ratio, adjust as needed
+            );
+
+            // Check if the loot is on screen
+            if (!IsOnScreen(normalizedScreenPos))
+            {
+                return; // Don't render if not on screen
+            }
+
+            // Convert to pixel coordinates
+
+            //TODO: Add screen dimensions to UI selector
+            Vector2 scrPos = NormalizedToPixelCoordinates(
+                normalizedScreenPos,
+                2560,
+                1440
+            );
+
+            //TODO: Add scale
+            var boxHalf = 3.5f * 1;
+            var label = $"{ShortName} - ₽{Price}";
             var boxPt = new SKRect(scrPos.X - boxHalf, scrPos.Y + boxHalf,
                 scrPos.X + boxHalf, scrPos.Y - boxHalf);
-            var paints = GetESPPaints();
-            var textPt = new SKPoint(scrPos.X,
-                scrPos.Y + 16f * ESP.Config.FontScale);
+            var paints = GetPaints(lootConfig);
             canvas.DrawRect(boxPt, paints.Item1);
-            textPt.DrawESPText(canvas, this, localPlayer, showDist, paints.Item2, label);
+            DrawESPText(scrPos.X, scrPos.Y, canvas, this, localPlayer, true, paints.Item2, label);
+        }
+
+        public void DrawESPText(float x, float y, SKCanvas canvas, WebRadarLoot entity, WebRadarPlayer localPlayer, bool printDist, SKPaint paint, params string[] lines)
+        {
+            var screenPos = new SKPoint(x, y + 16f * 1);
+            if (printDist && lines.Length > 0)
+            {
+                var dist = Vector3.Distance(entity.Position, localPlayer.Position);
+                var distStr = $" {dist.ToString("n1")}m";
+                lines[0] += distStr;
+            }
+            foreach (var l in lines)
+            {
+                if (string.IsNullOrEmpty(l?.Trim()))
+                    continue;
+                canvas.DrawText(l, screenPos, paint);
+                screenPos.Y += paint.TextSize;
+            }
         }
 
         public Vector2 GetScreenPosition(
@@ -185,7 +228,7 @@ namespace AncientMountain.Managed.Data
 
         private ValueTuple<SKPaint, SKPaint> GetPaints(LootUiConfig lootConfig)
         {
-            if (Price > lootConfig.Important)
+            if (Price > lootConfig?.Important)
             {
                 return new(SKPaints.PaintImportantLoot, SKPaints.TextImportantLoot);
             }

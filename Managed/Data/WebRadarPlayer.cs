@@ -180,5 +180,19 @@ namespace AncientMountain.Managed.Data
                     return new ValueTuple<SKPaint, SKPaint>(SKPaints.PaintBot, SKPaints.TextBot);
             }
         }
+
+        public Vector3 GetForwardVector()
+        {
+            // Assuming your WebRadarPlayer has a Rotation property (Euler angles in degrees)
+            float pitch = Rotation.X * (float)Math.PI / 180f;
+            float yaw = Rotation.Y * (float)Math.PI / 180f;
+
+            // Calculate the forward vector
+            float x = (float)Math.Sin(yaw) * (float)Math.Cos(pitch);
+            float y = (float)Math.Sin(pitch);
+            float z = (float)Math.Cos(yaw) * (float)Math.Cos(pitch);
+
+            return Vector3.Normalize(new Vector3(x, y, z));
+        }
     }
 }
