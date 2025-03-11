@@ -1,4 +1,5 @@
-﻿using AncientMountain.Managed.Skia;
+﻿using AncientMountain.Managed.Data;
+using AncientMountain.Managed.Skia;
 using SkiaSharp;
 using SkiaSharp.Views.Blazor;
 using System.Collections.Frozen;
@@ -11,6 +12,17 @@ using System.Text.Json.Serialization;
 
 namespace AncientMountain.Managed.Services
 {
+    public class LootUiConfig(int minPrice, int important, bool backpack, bool meds, bool food, string searchFilter)
+    {
+        public int MinPrice { get; set; } = minPrice;
+        public int Important { get; set; } = important;
+        public bool Backpack { get; set; } = backpack;
+        public bool Meds { get; set; } = meds;
+        public bool Food { get; set; } = food;
+        public string SearchFilter { get; set; } = searchFilter;
+        public List<string> ExcludeItems { get; set; } = new List<string>();
+    }
+
     public sealed class RadarService
     {
         /// <summary>
@@ -31,6 +43,8 @@ namespace AncientMountain.Managed.Services
             { "Sandbox", "Ground Zero" },
             { "Sandbox_high", "Ground Zero" }
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+        public static WebRadarUpdate Data { get; set; }
 
         private static float _scale = 1f;
         /// <summary>
@@ -60,7 +74,7 @@ namespace AncientMountain.Managed.Services
             LoadMaps(ref _maps);
         }
 
-        public void Render(SKPaintSurfaceEventArgs args, string localPlayerName)
+        public void Render(SKPaintSurfaceEventArgs args, string localPlayerName, LootUiConfig lootWidget)
         {
             var info = args.Info;
             var canvas = args.Surface.Canvas;
@@ -75,6 +89,7 @@ namespace AncientMountain.Managed.Services
                         break;
                     case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connected:
                         var data = _sr.Data;
+                        Data = _sr.Data;
                         if (data is not null &&
                             data.InGame &&
                             data.MapID is string mapID)
@@ -109,6 +124,13 @@ namespace AncientMountain.Managed.Services
                                     continue; // Already drawn local player, move on
                                 player.Draw(canvas, info, mapParams, localPlayer);
                             }
+                            //TODO: Make this a computed var that can be ran on the UI side as well instead of duplicating code
+                            var loot = data.Loot.Where(x => (string.IsNullOrEmpty(lootWidget.SearchFilter) || x.ShortName.Contains(lootWidget.SearchFilter)) && x.Price > lootWidget.MinPrice
+                            && !lootWidget.ExcludeItems.Contains(x.ShortName));
+                            foreach (var item in loot)
+                            {
+                                item.Draw(canvas, info, mapParams, localPlayer, lootWidget);
+                            }
                         }
                         else
                         {
@@ -126,6 +148,93 @@ namespace AncientMountain.Managed.Services
             catch { }
 
             canvas.Flush();
+        }
+
+        public void RenderESP(SKPaintSurfaceEventArgs args, string localPlayerName, LootUiConfig lootWidget)
+        {
+            var info = args.Info;
+            var canvas = args.Surface.Canvas;
+            canvas.Clear(SKColors.Black);
+
+            try
+            {
+                switch (_sr.ConnectionState)
+                {
+                    case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Disconnected:
+                        NotConnectedStatus(canvas, info);
+                        break;
+                    case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connected:
+                        var data = _sr.Data;
+                        Data = _sr.Data;
+                        if (data is not null &&
+                            data.InGame &&
+                            data.MapID is string mapID)
+                        {
+                            if (!_maps.TryGetValue(mapID, out var map))
+                                map = _maps["default"];
+                            var localPlayer = data.Players.FirstOrDefault(x => x.Name?.Equals(localPlayerName, StringComparison.OrdinalIgnoreCase) ?? false);
+                            localPlayer ??= data.Players.FirstOrDefault();
+                            if (localPlayer is null)
+                                break;
+                            var localPlayerPos = localPlayer.Position;
+                            var localPlayerMapPos = localPlayerPos.ToMapPos(map);
+                            var mapParams = GetMapParameters(info, map, localPlayerMapPos); // Map auto follow LocalPlayer
+                            var mapCanvasBounds = new SKRect() // Drawing Destination
+                            {
+                                Left = info.Rect.Left,
+                                Right = info.Rect.Right,
+                                Top = info.Rect.Top,
+                                Bottom = info.Rect.Bottom
+                            };
+                            // Draw Game Map
+                            canvas.DrawImage(map.Image, mapParams.Bounds, mapCanvasBounds, SKPaints.PaintBitmap);
+                            // Draw LocalPlayer
+                            localPlayer.Draw(canvas, info, mapParams, localPlayer);
+                            // Draw other players
+                            var allPlayers = data.Players
+                                .Where(x => !x.HasExfild); // Skip exfil'd players
+                                                           // Draw Players
+                            foreach (var player in allPlayers)
+                            {
+                                if (player == localPlayer)
+                                    continue; // Already drawn local player, move on
+                                player.Draw(canvas, info, mapParams, localPlayer);
+                            }
+                            //TODO: Make this a computed var that can be ran on the UI side as well instead of duplicating code
+                            var loot = data.Loot.Where(x => (string.IsNullOrEmpty(lootWidget.SearchFilter) || x.ShortName.Contains(lootWidget.SearchFilter)) && x.Price > lootWidget.MinPrice
+                            && !lootWidget.ExcludeItems.Contains(x.ShortName));
+                            foreach (var item in loot)
+                            {
+                                item.Draw(canvas, info, mapParams, localPlayer, lootWidget);
+                            }
+                        }
+                        else
+                        {
+                            WaitingForRaidStatus(canvas, info);
+                        }
+                        break;
+                    case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connecting:
+                        ConnectingStatus(canvas, info);
+                        break;
+                    case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Reconnecting:
+                        ReConnectingStatus(canvas, info);
+                        break;
+                }
+            }
+            catch { }
+
+            canvas.Flush();
+        }
+
+        private static void DrawLoot(SKCanvas canvas, WebRadarPlayer localPlayer, IEnumerable<WebRadarLoot> loot)
+        {
+            if (loot is not null)
+            {
+                foreach (var item in loot)
+                {
+                    item.DrawESP(canvas, localPlayer);
+                }
+            }
         }
 
         private readonly Stopwatch _statusSw = Stopwatch.StartNew();

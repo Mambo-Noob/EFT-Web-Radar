@@ -2,6 +2,7 @@
 using AncientMountain.Managed.MessagePack;
 using MessagePack;
 using Microsoft.AspNetCore.SignalR.Client;
+using System.Diagnostics;
 
 namespace AncientMountain.Managed.Services
 {
