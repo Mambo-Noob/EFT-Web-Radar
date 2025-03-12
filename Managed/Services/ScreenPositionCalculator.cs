@@ -90,106 +90,94 @@ namespace AncientMountain.Managed.Services
                                  bool isScoped = false, bool onScreenCheck = false, bool useTolerance = false)
         {
 
-            // Calculate relative position of the item from player
+            // Calculate vector from player to item
             Vector3 relativePos = itemPosition - playerPosition;
 
-            // Convert yaw and pitch from Vector2 to view vectors
-            // playerRotation.X = yaw (left/right), playerRotation.Y = pitch (up/down)
+            // Convert rotation angles to radians
             float yaw = playerRotation.X * (MathF.PI / 180f);
             float pitch = playerRotation.Y * (MathF.PI / 180f);
 
-            // Create the camera basis vectors
-            // Forward vector (camera's viewing direction)
+            // Calculate view matrix components
+            // Forward vector
             Vector3 forward = new Vector3(
-                (float)(Math.Cos(pitch) * Math.Sin(yaw)),
-                (float)Math.Sin(-pitch),  // Negative pitch because looking down is positive pitch
-                (float)(Math.Cos(pitch) * Math.Cos(yaw))
+                (float)Math.Cos(pitch) * (float)Math.Sin(yaw),
+                (float)Math.Sin(-pitch), // Negative pitch for looking down
+                (float)Math.Cos(pitch) * (float)Math.Cos(yaw)
             );
+
+            // Right vector - stays horizontal regardless of pitch
+            Vector3 right = new Vector3(
+                (float)Math.Cos(yaw + Math.PI / 2),
+                0, // No Y component to keep it horizontal
+                (float)Math.Sin(yaw + Math.PI / 2)
+            );
+
+            // Up vector - cross product of forward and right
+            Vector3 up = Vector3.Cross(right, forward); // Note order swapped to get correct up direction
+
+            // Normalize vectors
             forward = Vector3.Normalize(forward);
-
-            // Right vector (perpendicular to forward, along the horizontal plane)
-            // We want right to stay level with the horizon, so we use world up
-            Vector3 worldUp = new Vector3(0, 1, 0); // World up is always Y+
-            Vector3 right = Vector3.Cross(worldUp, forward);
             right = Vector3.Normalize(right);
+            up = Vector3.Normalize(up);
 
-            // Up vector (perpendicular to forward and right)
-            // This ensures our up vector properly accounts for pitch
-            Vector3 up = Vector3.Cross(forward, right);
+            // Project to view space
+            float z = Vector3.Dot(forward, relativePos); // Depth
 
-            // Transform the object's position to camera space
-            // z is the depth (distance to the object along the view direction)
-            float z = Vector3.Dot(forward, relativePos);
-
-            // If object is behind the camera, don't render it
-            if (z < 0.098f)
+            // Check if behind the camera
+            if (z < 0.1f)
             {
                 screenPos = default;
                 return false;
             }
 
-            // Convert relative position to direction vector
-            Vector3 dirToObject = Vector3.Normalize(relativePos);
+            // Check FOV constraints
+            float viewAngle = Vector3.Dot(forward, Vector3.Normalize(relativePos));
+            float fovLimit = (float)Math.Cos((fov * 0.5f) * (Math.PI / 180f));
 
-            // Calculate the angle between forward vector and the direction to the object
-            float dotProduct = Vector3.Dot(forward, dirToObject);
-
-            // For a proper perspective view, the object must be in front of the camera
-            // and within the view frustum defined by the FOV
-            float cosHalfFOV = MathF.Cos((fov * 0.5f) * (MathF.PI / 180f));
-
-            // If the object is outside our FOV, don't render it
-            // For an object to be visible, the dot product must be greater than cosine of half FOV
-            // This effectively creates a cone of vision
-            if (dotProduct < cosHalfFOV)
+            if (viewAngle < fovLimit)
             {
                 screenPos = default;
                 return false;
             }
 
-            // Get x and y coordinates in camera space
-            // These represent the object's position in the camera's coordinate system
+            // Project to camera space
             float x = Vector3.Dot(right, relativePos);
             float y = Vector3.Dot(up, relativePos);
 
-            // Debug visualization to understand coordinate values
-            // Console.WriteLine($"Camera-space coordinates - x: {x}, y: {y}, z: {z}");
+            // Convert to NDC using perspective division
+            float fovScale = (float)Math.Tan((fov * 0.5f) * (Math.PI / 180f));
 
-            // This ensures proper perspective with accurate height representation
-
-            // Convert to normalized device coordinates (NDC)
-            // Handle FOV and aspect ratio
+            // Apply projection based on mode
             if (isScoped)
             {
+                // Scoped view logic
                 float angleRadHalf = (MathF.PI / 180f) * fov * 0.5f;
                 float angleCtg = MathF.Cos(angleRadHalf) / MathF.Sin(angleRadHalf);
-                x = x / (z * angleCtg * aspectRatio * 0.5f);
-                y = y / (z * angleCtg * 0.5f);
+                x = x / (z * angleCtg * aspectRatio);
+                y = y / (z * angleCtg);
             } else
             {
-                // Standard perspective projection
-                float tanHalfFOV = MathF.Tan((fov * 0.5f) * (MathF.PI / 180f));
-                x = x / (z * tanHalfFOV * aspectRatio);
-                y = y / (z * tanHalfFOV);
+                // Standard projection
+                x = x / (z * fovScale * aspectRatio);
+                y = y / (z * fovScale);
             }
 
-            // Convert NDC to screen coordinates
+            // Convert to screen coordinates
             screenPos = new SKPoint
             {
                 X = viewportCenter.X * (1f + x),
-                Y = viewportCenter.Y * (1f - y)  // Y is flipped in screen coords
+                Y = viewportCenter.Y * (1f - y) // Y is flipped in screen coordinates
             };
 
-            // Check if the point is visible on screen
+            // Screen bounds check
             if (onScreenCheck)
             {
                 int left = useTolerance ? viewport.Left - VIEWPORT_TOLERANCE : viewport.Left;
-                int right = useTolerance ? viewport.Right + VIEWPORT_TOLERANCE : viewport.Right;
+                int rightl = useTolerance ? viewport.Right + VIEWPORT_TOLERANCE : viewport.Right;
                 int top = useTolerance ? viewport.Top - VIEWPORT_TOLERANCE : viewport.Top;
                 int bottom = useTolerance ? viewport.Bottom + VIEWPORT_TOLERANCE : viewport.Bottom;
 
-                // Check if the screen position is within the screen boundaries
-                if (screenPos.X < left || screenPos.X > right ||
+                if (screenPos.X < left || screenPos.X > rightl ||
                     screenPos.Y < top || screenPos.Y > bottom)
                 {
                     screenPos = default;
