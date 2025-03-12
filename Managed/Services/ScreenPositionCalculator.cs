@@ -102,20 +102,20 @@ namespace AncientMountain.Managed.Services
             // Forward vector (camera's viewing direction)
             Vector3 forward = new Vector3(
                 (float)(Math.Cos(pitch) * Math.Sin(yaw)),
-                (float)Math.Sin(-pitch),
+                (float)Math.Sin(-pitch),  // Negative pitch because looking down is positive pitch
                 (float)(Math.Cos(pitch) * Math.Cos(yaw))
             );
             forward = Vector3.Normalize(forward);
 
             // Right vector (perpendicular to forward, along the horizontal plane)
-            // Use explicit cross product calculation
-            Vector3 worldUp = new Vector3(0, 1, 0);
+            // We want right to stay level with the horizon, so we use world up
+            Vector3 worldUp = new Vector3(0, 1, 0); // World up is always Y+
             Vector3 right = Vector3.Cross(worldUp, forward);
             right = Vector3.Normalize(right);
 
             // Up vector (perpendicular to forward and right)
+            // This ensures our up vector properly accounts for pitch
             Vector3 up = Vector3.Cross(forward, right);
-            up = Vector3.Normalize(up);
 
             // Transform the object's position to camera space
             // z is the depth (distance to the object along the view direction)
@@ -148,8 +148,14 @@ namespace AncientMountain.Managed.Services
             }
 
             // Get x and y coordinates in camera space
+            // These represent the object's position in the camera's coordinate system
             float x = Vector3.Dot(right, relativePos);
             float y = Vector3.Dot(up, relativePos);
+
+            // Debug visualization to understand coordinate values
+            // Console.WriteLine($"Camera-space coordinates - x: {x}, y: {y}, z: {z}");
+
+            // This ensures proper perspective with accurate height representation
 
             // Convert to normalized device coordinates (NDC)
             // Handle FOV and aspect ratio
@@ -178,12 +184,12 @@ namespace AncientMountain.Managed.Services
             if (onScreenCheck)
             {
                 int left = useTolerance ? viewport.Left - VIEWPORT_TOLERANCE : viewport.Left;
-                int rightl = useTolerance ? viewport.Right + VIEWPORT_TOLERANCE : viewport.Right;
+                int right = useTolerance ? viewport.Right + VIEWPORT_TOLERANCE : viewport.Right;
                 int top = useTolerance ? viewport.Top - VIEWPORT_TOLERANCE : viewport.Top;
                 int bottom = useTolerance ? viewport.Bottom + VIEWPORT_TOLERANCE : viewport.Bottom;
 
                 // Check if the screen position is within the screen boundaries
-                if (screenPos.X < left || screenPos.X > rightl ||
+                if (screenPos.X < left || screenPos.X > right ||
                     screenPos.Y < top || screenPos.Y > bottom)
                 {
                     screenPos = default;
