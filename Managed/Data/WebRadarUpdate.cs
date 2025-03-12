@@ -152,7 +152,7 @@ namespace AncientMountain.Managed.Data
 
         private bool TryGetScreenPosition(out SKPoint scrPos, WebRadarPlayer localPlayer)
         {
-            return ScreenPositionCalculator.WorldToScreen(Position, out scrPos, localPlayer);
+            return ScreenPositionCalculator.WorldToScreenWithPlayer(Position, out scrPos, localPlayer, true);
         }
 
         // Helper method to determine if the object should be drawn based on distance
