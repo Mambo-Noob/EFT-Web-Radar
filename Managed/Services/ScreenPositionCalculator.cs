@@ -85,21 +85,30 @@ namespace AncientMountain.Managed.Services
         }
 
         public static bool WorldToScreen(Vector3 playerPosition, Vector2 playerRotation, Vector3 itemPosition,
-                                 out SKPoint screenPos, float fov, float aspectRatio,
-                                 SKPoint viewportCenter, Rectangle viewport,
-                                 bool isScoped = false, bool onScreenCheck = false, bool useTolerance = false)
+                                  out SKPoint screenPos, float fov, float aspectRatio,
+                                  SKPoint viewportCenter, Rectangle viewport,
+                                  bool isScoped = false, bool onScreenCheck = false, bool useTolerance = false)
         {
 
             // Convert rotation to radians
             float yawRad = playerRotation.X * (MathF.PI / 180f);
             float pitchRad = playerRotation.Y * (MathF.PI / 180f);
 
+            // We need to invert the yaw to correct the orientation issue
+            yawRad = -yawRad; // Invert yaw
+
             // Build rotation matrix from yaw and pitch
-            Matrix4x4 rotationMatrix = Matrix4x4.CreateFromYawPitchRoll(yawRad, -pitchRad, 0);
+            // For a typical FPS, we need to be careful about rotation order
+            Matrix4x4 rotationMatrixYaw = Matrix4x4.CreateRotationY(yawRad);
+            Matrix4x4 rotationMatrixPitch = Matrix4x4.CreateRotationX(pitchRad);
+            Matrix4x4 rotationMatrix = rotationMatrixPitch * rotationMatrixYaw; // Apply yaw then pitch
 
             // Create view matrix (first translate to player position, then apply rotation)
             Matrix4x4 translationMatrix = Matrix4x4.CreateTranslation(-playerPosition);
-            Matrix4x4 viewMatrix = translationMatrix * rotationMatrix;
+
+            // The view matrix needs to be rotation * translation (in that order)
+            // This ensures we first move the world so the player is at origin, then rotate
+            Matrix4x4 viewMatrix = Matrix4x4.Multiply(rotationMatrix, translationMatrix);
 
             // Get viewport center and create projection matrix
             float tanHalfFovY = MathF.Tan(fov * 0.5f * (MathF.PI / 180f));
@@ -120,7 +129,7 @@ namespace AncientMountain.Managed.Services
             Vector4 clipPos = Vector4.Transform(new Vector4(itemPosition, 1.0f), viewProjectionMatrix);
 
             // If behind camera or too close, don't render
-            if (clipPos.W < 0.1f)
+            if (clipPos.W < 0.1f || clipPos.Z < 0)
             {
                 screenPos = default;
                 return false;
@@ -150,10 +159,10 @@ namespace AncientMountain.Managed.Services
             // Screen bounds check
             if (onScreenCheck)
             {
-                int left = useTolerance ? viewport.Left - VIEWPORT_TOLERANCE : viewport.Left;
-                int right = useTolerance ? viewport.Right + VIEWPORT_TOLERANCE : viewport.Right;
-                int top = useTolerance ? viewport.Top - VIEWPORT_TOLERANCE : viewport.Top;
-                int bottom = useTolerance ? viewport.Bottom + VIEWPORT_TOLERANCE : viewport.Bottom;
+                var left = useTolerance ? viewport.Left - VIEWPORT_TOLERANCE : viewport.Left;
+                var right = useTolerance ? viewport.Right + VIEWPORT_TOLERANCE : viewport.Right;
+                var top = useTolerance ? viewport.Top - VIEWPORT_TOLERANCE : viewport.Top;
+                var bottom = useTolerance ? viewport.Bottom + VIEWPORT_TOLERANCE : viewport.Bottom;
 
                 if (screenPos.X < left || screenPos.X > right ||
                     screenPos.Y < top || screenPos.Y > bottom)
