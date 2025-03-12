@@ -113,7 +113,7 @@ namespace AncientMountain.Managed.Data
             //TODO: add screen size option in UI
             //var scrPos = ScreenPositionCalculator.GetItemScreenPosition(localPlayer, this, 1920, 1080, 90).GetValueOrDefault();
 
-            if (ScreenPositionCalculator.WorldToScreen(localPlayer.Position, localPlayer.Rotation, Position, out var screenPos, 70f, (16.0f / 9.0f), new SKPoint(vp.Width / 2f, vp.Height / 2f), vp))
+            if (ScreenPositionCalculator.WorldToScreen(localPlayer.Position, localPlayer.Rotation, Position, out var screenPos, 70f, (16.0f / 9.0f), new SKPoint(vp.Width / 2f, vp.Height / 2f), vp, false, true))
             {
                 var boxHalf = 3.5f * 1;
                 var label = $"{ShortName} - ₽{Price}";

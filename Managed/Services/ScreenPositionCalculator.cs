@@ -85,9 +85,9 @@ namespace AncientMountain.Managed.Services
         }
 
         public static bool WorldToScreen(Vector3 playerPosition, Vector2 playerRotation, Vector3 itemPosition,
-                                         out SKPoint screenPos, float fov, float aspectRatio,
-                                         SKPoint viewportCenter, Rectangle viewport,
-                                         bool isScoped = false, bool onScreenCheck = false, bool useTolerance = false)
+                                 out SKPoint screenPos, float fov, float aspectRatio,
+                                 SKPoint viewportCenter, Rectangle viewport,
+                                 bool isScoped = false, bool onScreenCheck = false, bool useTolerance = false)
         {
 
             // Calculate relative position of the item from player
@@ -95,51 +95,83 @@ namespace AncientMountain.Managed.Services
 
             // Convert yaw and pitch from Vector2 to view vectors
             // playerRotation.X = yaw (left/right), playerRotation.Y = pitch (up/down)
-            float yaw = playerRotation.X * (MathF.PI / 180f); // Convert to radians if using ToRadians()
-            float pitch = playerRotation.Y * (MathF.PI / 180f);   // Convert to radians if using ToRadians()
+            float yaw = playerRotation.X * (MathF.PI / 180f);
+            float pitch = playerRotation.Y * (MathF.PI / 180f);
 
-            // Calculate the view vectors from yaw and pitch angles
-            // Forward vector (negative Z) - matches your direction conversion
+            // Create the camera basis vectors
+            // Forward vector (camera's viewing direction)
             Vector3 forward = new Vector3(
                 (float)(Math.Cos(pitch) * Math.Sin(yaw)),
-                (float)Math.Sin(-pitch), // Negative pitch as in your code
+                (float)Math.Sin(-pitch),
                 (float)(Math.Cos(pitch) * Math.Cos(yaw))
             );
             forward = Vector3.Normalize(forward);
 
-            // Right vector (X axis) - cross product of world up and forward
-            Vector3 right = Vector3.Cross(Vector3.UnitY, forward);
+            // Right vector (perpendicular to forward, along the horizontal plane)
+            // Use explicit cross product calculation
+            Vector3 worldUp = new Vector3(0, 1, 0);
+            Vector3 right = Vector3.Cross(worldUp, forward);
             right = Vector3.Normalize(right);
 
-            // Up vector (Y axis) - cross product of forward and right
+            // Up vector (perpendicular to forward and right)
             Vector3 up = Vector3.Cross(forward, right);
             up = Vector3.Normalize(up);
 
-            // Calculate dot products to get coordinates in camera space
-            float w = Vector3.Dot(-forward, relativePos) + 1.0f; // Equivalent to M44
-            if (w < 0.098f)
+            // Transform the object's position to camera space
+            // z is the depth (distance to the object along the view direction)
+            float z = Vector3.Dot(forward, relativePos);
+
+            // If object is behind the camera, don't render it
+            if (z < 0.098f)
             {
                 screenPos = default;
                 return false;
             }
 
-            float x = Vector3.Dot(right, relativePos); // Equivalent to M14
-            float y = Vector3.Dot(up, relativePos);    // Equivalent to M24
+            // Convert relative position to direction vector
+            Vector3 dirToObject = Vector3.Normalize(relativePos);
 
-            // Handle scoped view if needed
+            // Calculate the angle between forward vector and the direction to the object
+            float dotProduct = Vector3.Dot(forward, dirToObject);
+
+            // For a proper perspective view, the object must be in front of the camera
+            // and within the view frustum defined by the FOV
+            float cosHalfFOV = MathF.Cos((fov * 0.5f) * (MathF.PI / 180f));
+
+            // If the object is outside our FOV, don't render it
+            // For an object to be visible, the dot product must be greater than cosine of half FOV
+            // This effectively creates a cone of vision
+            if (dotProduct < cosHalfFOV)
+            {
+                screenPos = default;
+                return false;
+            }
+
+            // Get x and y coordinates in camera space
+            float x = Vector3.Dot(right, relativePos);
+            float y = Vector3.Dot(up, relativePos);
+
+            // Convert to normalized device coordinates (NDC)
+            // Handle FOV and aspect ratio
             if (isScoped)
             {
                 float angleRadHalf = (MathF.PI / 180f) * fov * 0.5f;
                 float angleCtg = MathF.Cos(angleRadHalf) / MathF.Sin(angleRadHalf);
-                x /= angleCtg * aspectRatio * 0.5f;
-                y /= angleCtg * 0.5f;
+                x = x / (z * angleCtg * aspectRatio * 0.5f);
+                y = y / (z * angleCtg * 0.5f);
+            } else
+            {
+                // Standard perspective projection
+                float tanHalfFOV = MathF.Tan((fov * 0.5f) * (MathF.PI / 180f));
+                x = x / (z * tanHalfFOV * aspectRatio);
+                y = y / (z * tanHalfFOV);
             }
 
-            // Project to screen coordinates
+            // Convert NDC to screen coordinates
             screenPos = new SKPoint
             {
-                X = viewportCenter.X * (1f + x / w),
-                Y = viewportCenter.Y * (1f - y / w)
+                X = viewportCenter.X * (1f + x),
+                Y = viewportCenter.Y * (1f - y)  // Y is flipped in screen coords
             };
 
             // Check if the point is visible on screen
