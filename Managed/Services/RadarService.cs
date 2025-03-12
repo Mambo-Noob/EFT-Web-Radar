@@ -203,7 +203,7 @@ namespace AncientMountain.Managed.Services
             {
                 foreach (var item in loot)
                 {
-                    item.DrawESP(canvas, localPlayer, lootWidget);
+                    item.DrawESP(canvas, localPlayer);
                 }
             }
         }

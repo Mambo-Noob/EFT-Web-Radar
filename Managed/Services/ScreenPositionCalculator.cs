@@ -1,4 +1,5 @@
 ﻿using AncientMountain.Managed.Data;
+using AncientMountain.Pages;
 using SkiaSharp;
 using System.Drawing;
 using System.Numerics;
@@ -8,166 +9,87 @@ namespace AncientMountain.Managed.Services
     public static class ScreenPositionCalculator
     {
         private const int VIEWPORT_TOLERANCE = 800;
-        /// <summary>
-        /// Calculates the position of an item on the player's screen
-        /// </summary>
-        /// <param name="player">The player</param>
-        /// <param name="item">The item to calculate screen position for</param>
-        /// <param name="screenWidth">Width of the screen in pixels</param>
-        /// <param name="screenHeight">Height of the screen in pixels</param>
-        /// <param name="fieldOfView">Camera field of view in degrees</param>
-        /// <returns>Vector2 with x,y screen coordinates or null if item is behind player</returns>
-        public static Vector2? GetItemScreenPosition(WebRadarPlayer player, WebRadarLoot item, int screenWidth, int screenHeight, float fieldOfView = 75f)
+
+        // Helper method to get screen position
+
+
+
+
+        // Alternative WorldToScreen method that doesn't rely on _viewMatrix property
+        public static bool WorldToScreen(Vector3 worldPos, out SKPoint scrPos, WebRadarPlayer player, bool onScreenCheck = false, bool useTolerance = false)
         {
-            // Convert Unity Vector3 to System.Numerics.Vector3 if needed
-            Vector3 itemPosition = ConvertToSystemVector(item.Position);
+            var Viewport = new Rectangle(0, 0, 1920, 1080);
+            var ViewportCenter = new SKPoint(Viewport.Width / 2f, Viewport.Height / 2f);
 
-            // Calculate relative position (item position relative to player)
-            Vector3 relativePosition = itemPosition - player.Position;
+            // Create view matrix based on player position and rotation
+            float pitch = player.Rotation.Y * (MathF.PI / 180f);  // Convert to radians
+            float yaw = player.Rotation.X * (MathF.PI / 180f);    // Convert to radians
 
-            // Create rotation matrix based on player's rotation
-            float rotationRadians = player.MapRotation * (float)Math.PI / 180f;
-
-            // Rotate the relative position based on player's orientation
-            float rotatedX = relativePosition.X * (float)Math.Cos(rotationRadians) - relativePosition.Z * (float)Math.Sin(rotationRadians);
-            float rotatedZ = relativePosition.X * (float)Math.Sin(rotationRadians) + relativePosition.Z * (float)Math.Cos(rotationRadians);
-
-            // Construct the rotated position
-            Vector3 rotatedPosition = new Vector3(rotatedX, relativePosition.Y, rotatedZ);
-
-            // Check if item is in front of player (positive Z indicates in front in most 3D coordinate systems)
-            if (rotatedPosition.Z <= 0)
-            {
-                // Item is behind player, not visible on screen
-                return null;
-            }
-
-            // Calculate field of view in radians
-            float fovRadians = fieldOfView * (float)Math.PI / 180f;
-
-            // Calculate screen coordinates
-            float screenX = (rotatedPosition.X / (rotatedPosition.Z * (float)Math.Tan(fovRadians / 2f))) * screenWidth / 2f + screenWidth / 2f;
-            float screenY = (-rotatedPosition.Y / (rotatedPosition.Z * (float)Math.Tan(fovRadians / 2f))) * screenHeight / 2f + screenHeight / 2f;
-
-            return new Vector2(screenX, screenY);
-        }
-
-        /// <summary>
-        /// Helper method to convert Unity Vector3 to System.Numerics.Vector3 if needed
-        /// </summary>
-        private static Vector3 ConvertToSystemVector(Vector3 unityVector)
-        {
-            // If item.Position is already System.Numerics.Vector3, you can remove this method
-            // If it's UnityEngine.Vector3, you'll need to convert it
-            return unityVector; // Assuming it's already System.Numerics.Vector3
-        }
-
-        /// <summary>
-        /// Checks if the item is visible on screen
-        /// </summary>
-        public static bool IsItemOnScreen(Vector2? screenPosition, int screenWidth, int screenHeight)
-        {
-            if (!screenPosition.HasValue)
-                return false;
-
-            Vector2 position = screenPosition.Value;
-            return position.X >= 0 && position.X <= screenWidth &&
-                   position.Y >= 0 && position.Y <= screenHeight;
-        }
-
-        /// <summary>
-        /// Calculates distance between player and item
-        /// </summary>
-        public static float GetDistanceToItem(WebRadarPlayer player, WebRadarLoot item)
-        {
-            Vector3 itemPosition = ConvertToSystemVector(item.Position);
-            return Vector3.Distance(player.Position, itemPosition);
-        }
-
-        public static bool WorldToScreen(Vector3 playerPosition, Vector2 playerRotation, Vector3 itemPosition,
-                                  out SKPoint screenPos, float fov, float aspectRatio,
-                                  SKPoint viewportCenter, Rectangle viewport,
-                                  bool isScoped = false, bool onScreenCheck = false, bool useTolerance = false)
-        {
-
-            // Convert rotation to radians
-            float yawRad = playerRotation.X * (MathF.PI / 180f);
-            float pitchRad = playerRotation.Y * (MathF.PI / 180f);
-
-            // We need to invert the yaw to correct the orientation issue
-            yawRad = -yawRad; // Invert yaw
-
-            // Build rotation matrix from yaw and pitch
-            // For a typical FPS, we need to be careful about rotation order
-            Matrix4x4 rotationMatrixYaw = Matrix4x4.CreateRotationY(yawRad);
-            Matrix4x4 rotationMatrixPitch = Matrix4x4.CreateRotationX(pitchRad);
-            Matrix4x4 rotationMatrix = rotationMatrixPitch * rotationMatrixYaw; // Apply yaw then pitch
-
-            // Create view matrix (first translate to player position, then apply rotation)
-            Matrix4x4 translationMatrix = Matrix4x4.CreateTranslation(-playerPosition);
-
-            // The view matrix needs to be rotation * translation (in that order)
-            // This ensures we first move the world so the player is at origin, then rotate
-            Matrix4x4 viewMatrix = Matrix4x4.Multiply(rotationMatrix, translationMatrix);
-
-            // Get viewport center and create projection matrix
-            float tanHalfFovY = MathF.Tan(fov * 0.5f * (MathF.PI / 180f));
-            float zNear = 0.1f;
-            float zFar = 1000f;
-
-            Matrix4x4 projectionMatrix = Matrix4x4.CreatePerspectiveFieldOfView(
-                fov * (MathF.PI / 180f), // FOV in radians
-                aspectRatio,
-                zNear,
-                zFar
+            // Forward vector (direction the player is facing)
+            Vector3 forward = new Vector3(
+                MathF.Cos(pitch) * MathF.Cos(yaw),
+                MathF.Cos(pitch) * MathF.Sin(yaw),
+                MathF.Sin(pitch)
             );
 
-            // Combine view and projection matrices
-            Matrix4x4 viewProjectionMatrix = viewMatrix * projectionMatrix;
-
-            // Transform world position to clip space
-            Vector4 clipPos = Vector4.Transform(new Vector4(itemPosition, 1.0f), viewProjectionMatrix);
-
-            // If behind camera or too close, don't render
-            if (clipPos.W < 0.1f || clipPos.Z < 0)
-            {
-                screenPos = default;
-                return false;
-            }
-
-            // Perspective division to get normalized device coordinates
-            Vector3 ndcPos = new Vector3(
-                clipPos.X / clipPos.W,
-                clipPos.Y / clipPos.W,
-                clipPos.Z / clipPos.W
+            // Right vector (perpendicular to forward, pointing right)
+            Vector3 right = new Vector3(
+                MathF.Sin(yaw - MathF.PI / 2),
+                MathF.Cos(yaw - MathF.PI / 2),
+                0
             );
 
-            // Check if point is within NDC bounds (-1 to 1)
-            if (ndcPos.X < -1 || ndcPos.X > 1 || ndcPos.Y < -1 || ndcPos.Y > 1)
+            // Up vector (perpendicular to forward and right)
+            Vector3 up = Vector3.Cross(right, forward);
+
+            // Calculate relative position from player to world position
+            Vector3 relativePos = worldPos - player.Position;
+
+            // Calculate transformed coordinates using dot products
+            float w = Vector3.Dot(forward, relativePos) + 1.0f; // +1.0f is equivalent to M44
+
+            if (w < 0.098f)
             {
-                screenPos = default;
+                scrPos = default;
                 return false;
             }
 
-            // Convert to screen coordinates
-            screenPos = new SKPoint
+            float x = Vector3.Dot(right, relativePos);
+            float y = Vector3.Dot(up, relativePos);
+
+            // Handle scoped adjustments (if player has these properties)
+            float fov = 90.0f; // Default FOV - replace with player.FOV if available
+            float aspect = 16.0f / 9.0f; // Default aspect ratio - replace with player.AspectRatio if available
+            bool isScoped = false; // Default - replace with player.IsScoped if available
+
+            if (isScoped)
             {
-                X = viewportCenter.X * (1 + ndcPos.X),
-                Y = viewportCenter.Y * (1 - ndcPos.Y) // Y is flipped in screen space
+                float angleRadHalf = (MathF.PI / 180f) * fov * 0.5f;
+                float angleCtg = MathF.Cos(angleRadHalf) / MathF.Sin(angleRadHalf);
+
+                x /= angleCtg * aspect * 0.5f;
+                y /= angleCtg * 0.5f;
+            }
+
+            // Calculate screen position
+            var center = ViewportCenter; // Use existing ViewportCenter
+            scrPos = new SKPoint
+            {
+                X = center.X * (1f + x / w),
+                Y = center.Y * (1f - y / w)
             };
 
-            // Screen bounds check
+            // Optional on-screen check
             if (onScreenCheck)
             {
-                var left = useTolerance ? viewport.Left - VIEWPORT_TOLERANCE : viewport.Left;
-                var right = useTolerance ? viewport.Right + VIEWPORT_TOLERANCE : viewport.Right;
-                var top = useTolerance ? viewport.Top - VIEWPORT_TOLERANCE : viewport.Top;
-                var bottom = useTolerance ? viewport.Bottom + VIEWPORT_TOLERANCE : viewport.Bottom;
+                int left = useTolerance ? Viewport.Left - VIEWPORT_TOLERANCE : Viewport.Left;
+                int rightl = useTolerance ? Viewport.Right + VIEWPORT_TOLERANCE : Viewport.Right;
+                int top = useTolerance ? Viewport.Top - VIEWPORT_TOLERANCE : Viewport.Top;
+                int bottom = useTolerance ? Viewport.Bottom + VIEWPORT_TOLERANCE : Viewport.Bottom;
 
-                if (screenPos.X < left || screenPos.X > right ||
-                    screenPos.Y < top || screenPos.Y > bottom)
+                if (scrPos.X < left || scrPos.X > rightl || scrPos.Y < top || scrPos.Y > bottom)
                 {
-                    screenPos = default;
+                    scrPos = default;
                     return false;
                 }
             }
