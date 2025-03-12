@@ -1,10 +1,13 @@
 ﻿using AncientMountain.Managed.Data;
+using SkiaSharp;
+using System.Drawing;
 using System.Numerics;
 
 namespace AncientMountain.Managed.Services
 {
     public static class ScreenPositionCalculator
     {
+        private const int VIEWPORT_TOLERANCE = 800;
         /// <summary>
         /// Calculates the position of an item on the player's screen
         /// </summary>
@@ -79,6 +82,84 @@ namespace AncientMountain.Managed.Services
         {
             Vector3 itemPosition = ConvertToSystemVector(item.Position);
             return Vector3.Distance(player.Position, itemPosition);
+        }
+
+        public static bool WorldToScreen(Vector3 playerPosition, Vector2 playerRotation, Vector3 itemPosition,
+                                         out SKPoint screenPos, float fov, float aspectRatio,
+                                         SKPoint viewportCenter, Rectangle viewport,
+                                         bool isScoped = false, bool onScreenCheck = false, bool useTolerance = false)
+        {
+
+            // Calculate relative position of the item from player
+            Vector3 relativePos = itemPosition - playerPosition;
+
+            // Convert yaw and pitch from Vector2 to view vectors
+            // playerRotation.X = yaw (left/right), playerRotation.Y = pitch (up/down)
+            float yaw = playerRotation.X * (MathF.PI / 180f); // Convert to radians if using ToRadians()
+            float pitch = playerRotation.Y * (MathF.PI / 180f);   // Convert to radians if using ToRadians()
+
+            // Calculate the view vectors from yaw and pitch angles
+            // Forward vector (negative Z) - matches your direction conversion
+            Vector3 forward = new Vector3(
+                (float)(Math.Cos(pitch) * Math.Sin(yaw)),
+                (float)Math.Sin(-pitch), // Negative pitch as in your code
+                (float)(Math.Cos(pitch) * Math.Cos(yaw))
+            );
+            forward = Vector3.Normalize(forward);
+
+            // Right vector (X axis) - cross product of world up and forward
+            Vector3 right = Vector3.Cross(Vector3.UnitY, forward);
+            right = Vector3.Normalize(right);
+
+            // Up vector (Y axis) - cross product of forward and right
+            Vector3 up = Vector3.Cross(forward, right);
+            up = Vector3.Normalize(up);
+
+            // Calculate dot products to get coordinates in camera space
+            float w = Vector3.Dot(-forward, relativePos) + 1.0f; // Equivalent to M44
+            if (w < 0.098f)
+            {
+                screenPos = default;
+                return false;
+            }
+
+            float x = Vector3.Dot(right, relativePos); // Equivalent to M14
+            float y = Vector3.Dot(up, relativePos);    // Equivalent to M24
+
+            // Handle scoped view if needed
+            if (isScoped)
+            {
+                float angleRadHalf = (MathF.PI / 180f) * fov * 0.5f;
+                float angleCtg = MathF.Cos(angleRadHalf) / MathF.Sin(angleRadHalf);
+                x /= angleCtg * aspectRatio * 0.5f;
+                y /= angleCtg * 0.5f;
+            }
+
+            // Project to screen coordinates
+            screenPos = new SKPoint
+            {
+                X = viewportCenter.X * (1f + x / w),
+                Y = viewportCenter.Y * (1f - y / w)
+            };
+
+            // Check if the point is visible on screen
+            if (onScreenCheck)
+            {
+                int left = useTolerance ? viewport.Left - VIEWPORT_TOLERANCE : viewport.Left;
+                int rightl = useTolerance ? viewport.Right + VIEWPORT_TOLERANCE : viewport.Right;
+                int top = useTolerance ? viewport.Top - VIEWPORT_TOLERANCE : viewport.Top;
+                int bottom = useTolerance ? viewport.Bottom + VIEWPORT_TOLERANCE : viewport.Bottom;
+
+                // Check if the screen position is within the screen boundaries
+                if (screenPos.X < left || screenPos.X > rightl ||
+                    screenPos.Y < top || screenPos.Y > bottom)
+                {
+                    screenPos = default;
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 }

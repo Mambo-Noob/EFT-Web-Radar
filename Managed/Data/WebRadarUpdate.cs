@@ -3,6 +3,7 @@ using AncientMountain.Managed.Skia;
 using AncientMountain.Pages;
 using MessagePack;
 using SkiaSharp;
+using System.Drawing;
 using System.Numerics;
 
 namespace AncientMountain.Managed.Data
@@ -108,17 +109,22 @@ namespace AncientMountain.Managed.Data
 
         public void DrawESP(SKCanvas canvas, WebRadarPlayer localPlayer, LootUiConfig lootConfig)
         {
+            var vp = new Rectangle(0, 0, 2560, 1440);
             //TODO: add screen size option in UI
-            var scrPos = ScreenPositionCalculator.GetItemScreenPosition(localPlayer, this, 1920, 1080, 90).GetValueOrDefault();            
+            //var scrPos = ScreenPositionCalculator.GetItemScreenPosition(localPlayer, this, 1920, 1080, 90).GetValueOrDefault();
+
+            if (ScreenPositionCalculator.WorldToScreen(localPlayer.Position, localPlayer.Rotation, Position, out var screenPos, 70f, (16.0f / 9.0f), new SKPoint(vp.Width / 2f, vp.Height / 2f), vp))
+            {
+                var boxHalf = 3.5f * 1;
+                var label = $"{ShortName} - ₽{Price}";
+                var boxPt = new SKRect(screenPos.X - boxHalf, screenPos.Y + boxHalf,
+                    screenPos.X + boxHalf, screenPos.Y - boxHalf);
+                var paints = GetPaints(lootConfig);
+                canvas.DrawRect(boxPt, paints.Item1);
+                DrawESPText(screenPos.X, screenPos.Y, canvas, this, localPlayer, true, paints.Item2, label);
+            }
 
             //TODO: Add scale
-            var boxHalf = 3.5f * 1;
-            var label = $"{ShortName} - ₽{Price}";
-            var boxPt = new SKRect(scrPos.X - boxHalf, scrPos.Y + boxHalf,
-                scrPos.X + boxHalf, scrPos.Y - boxHalf);
-            var paints = GetPaints(lootConfig);
-            canvas.DrawRect(boxPt, paints.Item1);
-            DrawESPText(scrPos.X, scrPos.Y, canvas, this, localPlayer, true, paints.Item2, label);
         }
 
         public void DrawESPText(float x, float y, SKCanvas canvas, WebRadarLoot entity, WebRadarPlayer localPlayer, bool printDist, SKPaint paint, params string[] lines)
