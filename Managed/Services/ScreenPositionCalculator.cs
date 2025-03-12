@@ -90,94 +90,72 @@ namespace AncientMountain.Managed.Services
                                  bool isScoped = false, bool onScreenCheck = false, bool useTolerance = false)
         {
 
-            // Calculate vector from player to item
-            Vector3 relativePos = itemPosition - playerPosition;
+            // Convert rotation to radians
+            float yawRad = playerRotation.X * (MathF.PI / 180f);
+            float pitchRad = playerRotation.Y * (MathF.PI / 180f);
 
-            // Convert rotation angles to radians
-            float yaw = playerRotation.X * (MathF.PI / 180f);
-            float pitch = playerRotation.Y * (MathF.PI / 180f);
+            // Build rotation matrix from yaw and pitch
+            Matrix4x4 rotationMatrix = Matrix4x4.CreateFromYawPitchRoll(yawRad, -pitchRad, 0);
 
-            // Calculate view matrix components
-            // Forward vector
-            Vector3 forward = new Vector3(
-                (float)Math.Cos(pitch) * (float)Math.Sin(yaw),
-                (float)Math.Sin(-pitch), // Negative pitch for looking down
-                (float)Math.Cos(pitch) * (float)Math.Cos(yaw)
+            // Create view matrix (first translate to player position, then apply rotation)
+            Matrix4x4 translationMatrix = Matrix4x4.CreateTranslation(-playerPosition);
+            Matrix4x4 viewMatrix = translationMatrix * rotationMatrix;
+
+            // Get viewport center and create projection matrix
+            float tanHalfFovY = MathF.Tan(fov * 0.5f * (MathF.PI / 180f));
+            float zNear = 0.1f;
+            float zFar = 1000f;
+
+            Matrix4x4 projectionMatrix = Matrix4x4.CreatePerspectiveFieldOfView(
+                fov * (MathF.PI / 180f), // FOV in radians
+                aspectRatio,
+                zNear,
+                zFar
             );
 
-            // Right vector - stays horizontal regardless of pitch
-            Vector3 right = new Vector3(
-                (float)Math.Cos(yaw + Math.PI / 2),
-                0, // No Y component to keep it horizontal
-                (float)Math.Sin(yaw + Math.PI / 2)
-            );
+            // Combine view and projection matrices
+            Matrix4x4 viewProjectionMatrix = viewMatrix * projectionMatrix;
 
-            // Up vector - cross product of forward and right
-            Vector3 up = Vector3.Cross(right, forward); // Note order swapped to get correct up direction
+            // Transform world position to clip space
+            Vector4 clipPos = Vector4.Transform(new Vector4(itemPosition, 1.0f), viewProjectionMatrix);
 
-            // Normalize vectors
-            forward = Vector3.Normalize(forward);
-            right = Vector3.Normalize(right);
-            up = Vector3.Normalize(up);
-
-            // Project to view space
-            float z = Vector3.Dot(forward, relativePos); // Depth
-
-            // Check if behind the camera
-            if (z < 0.1f)
+            // If behind camera or too close, don't render
+            if (clipPos.W < 0.1f)
             {
                 screenPos = default;
                 return false;
             }
 
-            // Check FOV constraints
-            float viewAngle = Vector3.Dot(forward, Vector3.Normalize(relativePos));
-            float fovLimit = (float)Math.Cos((fov * 0.5f) * (Math.PI / 180f));
+            // Perspective division to get normalized device coordinates
+            Vector3 ndcPos = new Vector3(
+                clipPos.X / clipPos.W,
+                clipPos.Y / clipPos.W,
+                clipPos.Z / clipPos.W
+            );
 
-            if (viewAngle < fovLimit)
+            // Check if point is within NDC bounds (-1 to 1)
+            if (ndcPos.X < -1 || ndcPos.X > 1 || ndcPos.Y < -1 || ndcPos.Y > 1)
             {
                 screenPos = default;
                 return false;
-            }
-
-            // Project to camera space
-            float x = Vector3.Dot(right, relativePos);
-            float y = Vector3.Dot(up, relativePos);
-
-            // Convert to NDC using perspective division
-            float fovScale = (float)Math.Tan((fov * 0.5f) * (Math.PI / 180f));
-
-            // Apply projection based on mode
-            if (isScoped)
-            {
-                // Scoped view logic
-                float angleRadHalf = (MathF.PI / 180f) * fov * 0.5f;
-                float angleCtg = MathF.Cos(angleRadHalf) / MathF.Sin(angleRadHalf);
-                x = x / (z * angleCtg * aspectRatio);
-                y = y / (z * angleCtg);
-            } else
-            {
-                // Standard projection
-                x = x / (z * fovScale * aspectRatio);
-                y = y / (z * fovScale);
             }
 
             // Convert to screen coordinates
             screenPos = new SKPoint
             {
-                X = viewportCenter.X * (1f + x),
-                Y = viewportCenter.Y * (1f - y) // Y is flipped in screen coordinates
+                X = viewportCenter.X * (1 + ndcPos.X),
+                Y = viewportCenter.Y * (1 - ndcPos.Y) // Y is flipped in screen space
             };
 
             // Screen bounds check
             if (onScreenCheck)
             {
                 int left = useTolerance ? viewport.Left - VIEWPORT_TOLERANCE : viewport.Left;
-                int rightl = useTolerance ? viewport.Right + VIEWPORT_TOLERANCE : viewport.Right;
+                int right = useTolerance ? viewport.Right + VIEWPORT_TOLERANCE : viewport.Right;
                 int top = useTolerance ? viewport.Top - VIEWPORT_TOLERANCE : viewport.Top;
                 int bottom = useTolerance ? viewport.Bottom + VIEWPORT_TOLERANCE : viewport.Bottom;
 
-                if (screenPos.X < left || screenPos.X > rightl ||
+                if (screenPos.X < left || screenPos.X > right ||
                     screenPos.Y < top || screenPos.Y > bottom)
                 {
                     screenPos = default;
