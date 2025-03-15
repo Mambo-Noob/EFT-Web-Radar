@@ -177,7 +177,11 @@ namespace AncientMountain.Managed.Services
                             if (localPlayer is null)
                                 break;
                             //TODO: use filtered loot
-                            DrawLoot(canvas, localPlayer, data.Loot, lootWidget);
+                            //DrawLoot(canvas, localPlayer, data.Loot, lootWidget);
+                            foreach(var p  in data.Players)
+                            {
+                                p.DrawESP(canvas, localPlayer);
+                            }
                         }
                         else
                         {
