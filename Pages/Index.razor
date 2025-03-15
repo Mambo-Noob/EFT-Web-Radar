@@ -32,7 +32,9 @@
         <input type="range" step="0.01" min="0.50" max="2.00" @bind="RadarService.Scale" @bind:culture="CultureInfo.InvariantCulture" />
         <label title="Zoom Factor to zoom in/out on the Radar Map.">Zoom: </label>
         <input type="range" step="0.01" min="0.01" max="2.00" @bind="RadarService.Zoom" @bind:culture="CultureInfo.InvariantCulture" />
-        <button title="Naviagte to ESP tab." class="rounded-button" @onclick="@(() => { Navigation.NavigateTo("/ESP");})">Open ESP</button>
+        <a class="rounded-button" href="@($"{Navigation.Uri}/ESP")" target="_blank" rel="noopener noreferrer">
+            Open ESP
+        </a>
 
         <div class="widget-container @(isDragging ? "widget-dragging" : "")" style="left:@(widgetX)px; top:@(widgetY)px; position: absolute;">
             <div class="widget-header"
@@ -46,13 +48,13 @@
             @if (showLootWidget)
             {
                 <div id="loot-widget" class="widget-body">
-                    <label>Min Loot Price: @lootUiConfig.MinPrice</label>
-                    <input @bind="lootUiConfig.MinPrice" type="range" min="0" max="500000" step="1000" />
+                    <label>Min Loot Price: @RadarService.lootUiConfig.MinPrice</label>
+                    <input @bind="RadarService.lootUiConfig.MinPrice" type="range" min="0" max="500000" step="1000" />
 
-                    <label>Important Loot Price: @lootUiConfig.Important</label>
-                    <input @bind="lootUiConfig.Important" type="range" min="0" max="500000" step="1000">
+                    <label>Important Loot Price: @RadarService.lootUiConfig.Important</label>
+                    <input @bind="RadarService.lootUiConfig.Important" type="range" min="0" max="500000" step="1000">
                     <label>Search:</label>
-                    <input @bind="lootUiConfig.SearchFilter" type="text" placeholder="Search Loot...">
+                    <input @bind="RadarService.lootUiConfig.SearchFilter" type="text" placeholder="Search Loot...">
                     <div>
                         <input type="checkbox">Show Food
 
@@ -62,10 +64,10 @@
                     </div>
                     <div>
                         <button @onclick="@(() => {
-                            lootUiConfig = new LootUiConfig(50000, 200000, false, false, false, null);
+                            RadarService.lootUiConfig = new LootUiConfig(50000, 200000, false, false, false, null);
                         })">Clear Search</button>
                     </div>
-                    @if (RadarService.Data != null)
+                    @if (RadarService.filteredLoot != null)
                     {
                         <table>
 
@@ -78,14 +80,12 @@
                             </thead>
                             <tbody>
                                 @* //TODO: Make this a computed var that can be ran on the UI side as well instead of duplicating code *@
-                                @foreach (var item in RadarService.Data.Loot.OrderByDescending(x => x.Price)
-                        .Where(x => (string.IsNullOrEmpty(lootUiConfig.SearchFilter) || x.ShortName.Contains(lootUiConfig.SearchFilter, StringComparison.InvariantCultureIgnoreCase))
-                               && x.Price > lootUiConfig.MinPrice && !lootUiConfig.ExcludeItems.Contains(x.ShortName)))
+                                @foreach (var item in RadarService.filteredLoot)
                                 {
                                     <tr>
                                         <td>@item.ShortName</td>
                                         <td>@item.Price</td>
-                                        <td class="remove" @onclick="@(() => {lootUiConfig.ExcludeItems.Add(item.ShortName);})">Remove</td>
+                                        <td class="remove" @onclick="@(() => {RadarService.lootUiConfig.ExcludeItems.Add(item.Id);})">Remove</td>
                                     </tr>
                                 }
                             </tbody>
@@ -112,7 +112,6 @@
     private bool isConnecting = false;
     private bool showAlert = false;
     private string alertMessage = null;
-    private LootUiConfig lootUiConfig = new(50000, 200000, false, false, false, null);
 
     // Drag functionality variables
     private double widgetX = 15; // Initial X position
@@ -240,7 +239,7 @@
 
     private void OnPaintSurface(SKPaintSurfaceEventArgs args)
     {
-        RadarService.Render(args, name, lootUiConfig);
+        RadarService.Render(args, name);
         StateHasChanged();
     }
 

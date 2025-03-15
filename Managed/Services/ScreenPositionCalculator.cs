@@ -122,14 +122,14 @@ namespace AncientMountain.Managed.Services
             return true;
         }
 
-        public static bool IsFacingTarget(WebRadarPlayer lPlayer, WebRadarPlayer enemy, float? maxDist = null)
+        public static bool IsFacingTarget(WebRadarPlayer lPlayer, IEntity entity, float? maxDist = null)
         {
-            var distance = Vector3.Distance(lPlayer.Position, enemy.Position);
+            var distance = Vector3.Distance(lPlayer.Position, entity.Position);
             if (maxDist is float maxDistFloat && distance > maxDistFloat)
                 return false;
 
             // Calculate the 3D vector from enemy to player (including vertical component)
-            Vector3 directionToTarget = Vector3.Normalize(enemy.Position - lPlayer.Position);
+            Vector3 directionToTarget = Vector3.Normalize(entity.Position - lPlayer.Position);
 
             // Convert enemy rotation to a direction vector
             Vector3 sourceDirection = Vector3.Normalize(RotationToDirection(lPlayer.Rotation));
@@ -149,17 +149,17 @@ namespace AncientMountain.Managed.Services
         }
 
         //Acting as the lPlayer, get position of other player/enemy
-        public static bool WorldToScreenPositionOnEnemyView(out SKPoint screenPos, WebRadarPlayer enemy, WebRadarPlayer lPlayer, int screenWidth = 2560, int screenHeight = 1440, float horizontalFOV = 70f)
+        public static bool WorldToScreenPositionOnEnemyView(out SKPoint screenPos, IEntity entity, WebRadarPlayer lPlayer, int screenWidth = 2560, int screenHeight = 1440, float horizontalFOV = 70f)
         {
             screenPos = new SKPoint(0, 0);
 
             // First check if the lPlayer is actually facing the enemy
             // We can reuse the existing function for this initial check
-            if (!IsFacingTarget(lPlayer, enemy))
+            if (!IsFacingTarget(lPlayer, entity))
                 return false;
 
             // Calculate the vector from player to enemy
-            Vector3 directionToEnemy = Vector3.Normalize(enemy.Position - lPlayer.Position);
+            Vector3 directionToEnemy = Vector3.Normalize(entity.Position - lPlayer.Position);
 
             // Get the player's forward direction
             Vector3 lPlayerForward = Vector3.Normalize(RotationToDirection(lPlayer.Rotation));
