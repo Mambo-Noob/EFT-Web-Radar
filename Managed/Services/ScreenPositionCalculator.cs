@@ -199,7 +199,7 @@ namespace AncientMountain.Managed.Services
                 return false;
 
             // Convert NDC to screen coordinates (pixel coordinates)
-            screenPos.X = (-ndcX + 1) * screenWidth / 2;
+            screenPos.X = (ndcX + 1) * screenWidth / 2;
             screenPos.Y = (1 - ndcY) * screenHeight / 2; // Invert Y as screen coordinates go from top to bottom
 
             return true;
