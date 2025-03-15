@@ -166,7 +166,7 @@ namespace AncientMountain.Managed.Services
 
             // Calculate right and up vectors for the player's view
             Vector3 lPlayerRight = -Vector3.Normalize(Vector3.Cross(lPlayerForward, new Vector3(0, 1, 0)));
-            Vector3 lPlayerUp = Vector3.Normalize(Vector3.Cross(lPlayerRight, lPlayerForward));
+            Vector3 lPlayerUp = -Vector3.Normalize(Vector3.Cross(lPlayerRight, lPlayerForward));
 
             // Convert horizontal FOV to radians
             float hFovRad = horizontalFOV * (float)Math.PI / 180f;
