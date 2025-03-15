@@ -165,7 +165,7 @@ namespace AncientMountain.Managed.Services
             Vector3 lPlayerForward = Vector3.Normalize(RotationToDirection(lPlayer.Rotation));
 
             // Calculate right and up vectors for the player's view
-            Vector3 lPlayerRight = Vector3.Normalize(Vector3.Cross(lPlayerForward, new Vector3(0, 1, 0)));
+            Vector3 lPlayerRight = -Vector3.Normalize(Vector3.Cross(lPlayerForward, new Vector3(0, 1, 0)));
             Vector3 lPlayerUp = Vector3.Normalize(Vector3.Cross(lPlayerRight, lPlayerForward));
 
             // Convert horizontal FOV to radians
@@ -199,7 +199,7 @@ namespace AncientMountain.Managed.Services
                 return false;
 
             // Convert NDC to screen coordinates (pixel coordinates)
-            screenPos.X = (ndcX + 1) * screenWidth / 2;
+            screenPos.X = (-ndcX + 1) * screenWidth / 2;
             screenPos.Y = (1 - ndcY) * screenHeight / 2; // Invert Y as screen coordinates go from top to bottom
 
             return true;

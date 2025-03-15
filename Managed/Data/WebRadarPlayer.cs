@@ -2,6 +2,7 @@
 using AncientMountain.Managed.Skia;
 using MessagePack;
 using SkiaSharp;
+using System;
 using System.Drawing;
 using System.Numerics;
 
@@ -101,11 +102,14 @@ namespace AncientMountain.Managed.Data
         public void DrawESP(SKCanvas canvas, WebRadarPlayer localPlayer)
         {
             ScreenPositionCalculator.WorldToScreenPositionOnEnemyView(out var point, this, localPlayer);
+            var distance = Vector3.Distance(localPlayer.Position, Position);
 
             var paints = GetPaints(localPlayer);
             var spacing = 3 * RadarService.Scale;
             point.Offset(9 * RadarService.Scale, spacing);
             canvas.DrawCircle(point, 2 * RadarService.Scale, paints.Item1);
+            point.Y += paints.Item2.TextSize;
+            canvas.DrawText($"{distance}m", point, paints.Item2);
         }
 
         /// <summary>
