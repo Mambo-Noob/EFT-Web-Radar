@@ -9,7 +9,7 @@ using System.Numerics;
 namespace AncientMountain.Managed.Data
 {
     [MessagePackObject]
-    public sealed class WebRadarPlayer
+    public sealed class WebRadarPlayer : IEntity
     {
         /// <summary>
         /// Player Name.
@@ -101,14 +101,15 @@ namespace AncientMountain.Managed.Data
 
         public void DrawESP(SKCanvas canvas, WebRadarPlayer localPlayer)
         {
-            ScreenPositionCalculator.WorldToScreenPositionOnEnemyView(out var point, this, localPlayer);
-            var distance = Vector3.Distance(localPlayer.Position, Position);
+            if (this.HasExfild || !ScreenPositionCalculator.WorldToScreenPositionOnEnemyView(out var point, this, localPlayer))
+            {
+                return;
+            }
 
+            var distance = Vector3.Distance(localPlayer.Position, Position);
             var paints = GetPaints(localPlayer);
-            var spacing = 3 * RadarService.Scale;
-            point.Offset(9 * RadarService.Scale, spacing);
+
             canvas.DrawCircle(point, 2 * RadarService.Scale, paints.Item1);
-            point.Y += paints.Item2.TextSize;
             canvas.DrawText($"{distance}m", point, paints.Item2);
         }
 
@@ -179,6 +180,10 @@ namespace AncientMountain.Managed.Data
         {
             if (this == localPlayer)
                 return new ValueTuple<SKPaint, SKPaint>(SKPaints.PaintLocalPlayer, SKPaints.TextLocalPlayer);
+
+            if (!this.IsActive || !this.IsAlive)
+                return new ValueTuple<SKPaint, SKPaint>(SKPaints.PaintCorpse, SKPaints.TextCorpse);
+
             switch (this.Type)
             {
                 case WebPlayerType.LocalPlayer:

@@ -20,7 +20,12 @@ namespace AncientMountain.Managed.Services
         public bool Meds { get; set; } = meds;
         public bool Food { get; set; } = food;
         public string SearchFilter { get; set; } = searchFilter;
-        public List<string> ExcludeItems { get; set; } = new List<string>();
+        public HashSet<Guid> ExcludeItems { get; set; } = new HashSet<Guid>();
+    }
+
+    public class ESPUiConfig()
+    {
+
     }
 
     public sealed class RadarService
@@ -44,7 +49,9 @@ namespace AncientMountain.Managed.Services
             { "Sandbox_high", "Ground Zero" }
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-        public static WebRadarUpdate Data { get; set; }
+        public static LootUiConfig lootUiConfig { get; set; }
+        public static ESPUiConfig espUiConfig { get; set; }
+        public static IEnumerable<WebRadarLoot> filteredLoot { get; set; }
 
         private static float _scale = 1f;
         /// <summary>
@@ -74,7 +81,7 @@ namespace AncientMountain.Managed.Services
             LoadMaps(ref _maps);
         }
 
-        public void Render(SKPaintSurfaceEventArgs args, string localPlayerName, LootUiConfig lootWidget)
+        public void Render(SKPaintSurfaceEventArgs args, string localPlayerName)
         {
             var info = args.Info;
             var canvas = args.Surface.Canvas;
@@ -89,7 +96,6 @@ namespace AncientMountain.Managed.Services
                         break;
                     case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connected:
                         var data = _sr.Data;
-                        Data = _sr.Data;
                         if (data is not null &&
                             data.InGame &&
                             data.MapID is string mapID)
@@ -124,12 +130,11 @@ namespace AncientMountain.Managed.Services
                                     continue; // Already drawn local player, move on
                                 player.Draw(canvas, info, mapParams, localPlayer);
                             }
-                            //TODO: Make this a computed var that can be ran on the UI side as well instead of duplicating code
-                            var loot = data.Loot.Where(x => (string.IsNullOrEmpty(lootWidget.SearchFilter) || x.ShortName.Contains(lootWidget.SearchFilter)) && x.Price > lootWidget.MinPrice
-                            && !lootWidget.ExcludeItems.Contains(x.ShortName));
-                            foreach (var item in loot)
+
+                            filteredLoot = data.Loot.Where(x => (string.IsNullOrEmpty(lootUiConfig.SearchFilter) || x.ShortName.ToLower().Contains(lootUiConfig.SearchFilter.ToLower())) && x.Price > lootUiConfig.MinPrice && !lootUiConfig.ExcludeItems.Contains(x.Id));
+                            foreach (var item in filteredLoot)
                             {
-                                item.Draw(canvas, info, mapParams, localPlayer, lootWidget);
+                                item.Draw(canvas, info, mapParams, localPlayer, lootUiConfig);
                             }
                         }
                         else
@@ -150,7 +155,7 @@ namespace AncientMountain.Managed.Services
             canvas.Flush();
         }
 
-        public void RenderESP(SKPaintSurfaceEventArgs args, string localPlayerName, LootUiConfig lootWidget)
+        public void RenderESP(SKPaintSurfaceEventArgs args, string localPlayerName)
         {
             var info = args.Info;
             var canvas = args.Surface.Canvas;
@@ -165,7 +170,6 @@ namespace AncientMountain.Managed.Services
                         break;
                     case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connected:
                         var data = _sr.Data;
-                        Data = _sr.Data;
                         if (data is not null &&
                             data.InGame &&
                             data.MapID is string mapID)
@@ -177,7 +181,7 @@ namespace AncientMountain.Managed.Services
                             if (localPlayer is null)
                                 break;
                             //TODO: use filtered loot
-                            //DrawLoot(canvas, localPlayer, data.Loot, lootWidget);
+                            DrawLoot(canvas, localPlayer, filteredLoot);
                             foreach(var p  in data.Players)
                             {
                                 p.DrawESP(canvas, localPlayer);
@@ -201,12 +205,13 @@ namespace AncientMountain.Managed.Services
             canvas.Flush();
         }
 
-        private static void DrawLoot(SKCanvas canvas, WebRadarPlayer localPlayer, IEnumerable<WebRadarLoot> loot, LootUiConfig lootWidget)
+        private static void DrawLoot(SKCanvas canvas, WebRadarPlayer localPlayer, IEnumerable<WebRadarLoot> loot)
         {
             if (loot is not null)
             {
                 foreach (var item in loot)
                 {
+                    //Add UILootConfig
                     item.DrawESP(canvas, localPlayer);
                 }
             }
