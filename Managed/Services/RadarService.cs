@@ -54,6 +54,7 @@ namespace AncientMountain.Managed.Services
         public static LootUiConfig lootUiConfig { get; set; } = new LootUiConfig(50000, 200000, false, false, false, null);
         public static ESPUiConfig espUiConfig { get; set; } = new ESPUiConfig();
         public static IEnumerable<WebRadarLoot> filteredLoot { get; set; }
+        public static IEnumerable<string> playerNames { get; set; }
 
         private static float _scale = 1f;
         /// <summary>
@@ -125,7 +126,8 @@ namespace AncientMountain.Managed.Services
                             // Draw other players
                             var allPlayers = data.Players
                                 .Where(x => !x.HasExfild); // Skip exfil'd players
-                                                           // Draw Players
+                            playerNames = allPlayers.Where(x => x.Type == WebPlayerType.LocalPlayer || x.Type == WebPlayerType.Teammate).Select(x => x.Name);
+                                                           
                             foreach (var player in allPlayers)
                             {
                                 if (player == localPlayer)

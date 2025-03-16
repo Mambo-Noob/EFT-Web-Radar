@@ -27,7 +27,17 @@
         <input type="text" @bind="password" class="password-input" maxlength="12" spellcheck="false" />
         <button title="Connect to the remote Web Radar Server." class="rounded-button" @onclick="Connect" disabled="@isConnecting">Connect</button>
         <label title="Your in-game name. This will make the radar focus on you.">Your Name: </label>
-        <input type="text" @bind="name" class="name-input" maxlength="25" spellcheck="false" />
+        @if (RadarService.playerNames != null)
+        {
+            <select class="name-input" @onchange="playerSelected">
+                <option selected value="localPlayer">select one</option>
+                @foreach (var item in RadarService.playerNames)
+                {
+                    <option value="@item">@item</option>
+                }
+            </select>
+        }
+
         <label title="Scale Factor to make elements smaller/larger on the Radar Map.">Scale: </label>
         <input type="range" step="0.01" min="0.50" max="2.00" @bind="RadarService.Scale" @bind:culture="CultureInfo.InvariantCulture" />
         <label title="Zoom Factor to zoom in/out on the Radar Map.">Zoom: </label>
@@ -145,6 +155,11 @@
         {
             password = query["password"];
         }
+    }
+
+    private void playerSelected(ChangeEventArgs args)
+    {
+        name = args.Value.ToString();
     }
 
     private void toggleLootWidget()
