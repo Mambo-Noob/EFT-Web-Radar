@@ -20,13 +20,13 @@ namespace AncientMountain.Managed.Services
         public bool Meds { get; set; } = meds;
         public bool Food { get; set; } = food;
         public string SearchFilter { get; set; } = searchFilter;
-        public HashSet<Guid> ExcludeItems { get; set; } = new HashSet<Guid>();
+        public HashSet<string> ExcludeItems { get; set; } = new HashSet<string>();
     }
 
     public class ESPUiConfig()
     {
-        public int ScreenWidth { get; set; } = 1440;
-        public int ScreenHeight { get; set; } = 2560;
+        public int ScreenWidth { get; set; } = 2560;
+        public int ScreenHeight { get; set; } = 1440;
         public float FOV { get; set; } = 70f;
     }
 
@@ -137,7 +137,7 @@ namespace AncientMountain.Managed.Services
 
                             filteredLoot = data.Loot.Where(
                                 x => (string.IsNullOrEmpty(lootUiConfig.SearchFilter) || x.ShortName.Contains(lootUiConfig.SearchFilter, StringComparison.CurrentCultureIgnoreCase))
-                                && x.Price > lootUiConfig.MinPrice && !lootUiConfig.ExcludeItems.Contains(x.Id));
+                                && x.Price > lootUiConfig.MinPrice && !lootUiConfig.ExcludeItems.Contains(x.Id)).OrderByDescending(x => x.Price);
                             foreach (var item in filteredLoot)
                             {
                                 item.Draw(canvas, info, mapParams, localPlayer, lootUiConfig);
@@ -189,9 +189,10 @@ namespace AncientMountain.Managed.Services
 
                             filteredLoot = data.Loot.Where(
                                 x => (string.IsNullOrEmpty(lootUiConfig.SearchFilter) || x.ShortName.Contains(lootUiConfig.SearchFilter, StringComparison.CurrentCultureIgnoreCase))
-                                && x.Price > lootUiConfig.MinPrice && !lootUiConfig.ExcludeItems.Contains(x.Id));
+                                && x.Price > lootUiConfig.MinPrice && !lootUiConfig.ExcludeItems.Contains(x.Id)).OrderByDescending(x => x.Price);
 
                             //Players and items show at weird height (if on the ground or laying down, shows weird)
+                            //Scaling is a bit off on the screen. Straight head is good but corner of screens are off
                             DrawLoot(canvas, localPlayer, filteredLoot);
                             foreach(var p  in data.Players)
                             {
