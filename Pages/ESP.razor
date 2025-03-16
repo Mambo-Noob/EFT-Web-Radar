@@ -9,7 +9,16 @@
 <div class="canvas-container">
     <div class="connection-controls">
         <label title="Your in-game name. This will make the radar focus on you.">Your Name: </label>
-        <input type="text" @bind="name" class="name-input" maxlength="25" spellcheck="false" />
+        @if (RadarService.playerNames != null)
+        {
+            <select class="name-input" @onchange="playerSelected">
+                <option selected value="localPlayer">select one</option>
+                @foreach (var item in RadarService.playerNames)
+                {
+                    <option value="@item">@item</option>
+                }
+            </select>
+        }
         <div>
             <div class="input-group">
                 <label for="width">Width (px):</label>
@@ -63,6 +72,11 @@
     {
         RadarService.RenderESP(args, name);
         StateHasChanged();
+    }
+
+    private void playerSelected(ChangeEventArgs args)
+    {
+        name = args.Value.ToString();
     }
 
     private void FullScreen()
