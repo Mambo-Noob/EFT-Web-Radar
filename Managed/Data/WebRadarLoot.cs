@@ -10,7 +10,7 @@ namespace AncientMountain.Managed.Data
     public readonly struct WebRadarLoot : IEntity
     {
         [IgnoreMember]
-        public Guid Id => Guid.NewGuid();
+        public readonly string Id => $"{ShortName}-{Position.ToString()}";
         /// <summary>
         /// Item's Short Name.
         /// </summary>
@@ -88,7 +88,8 @@ namespace AncientMountain.Managed.Data
             var paints = GetPaints(lootUiConfig);
 
             canvas.DrawCircle(point, RadarService.Scale, paints.Item1);
-            canvas.DrawText($"{ShortName} - {Price}{distance}m", point, paints.Item2);
+            //Make this more like local radar
+            canvas.DrawText($"{ShortName} - {Price} - {distance}m", point, paints.Item2);
         }
 
         private ValueTuple<SKPaint, SKPaint> GetPaints(LootUiConfig lootConfig)
