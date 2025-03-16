@@ -99,9 +99,9 @@ namespace AncientMountain.Managed.Data
             }
         }
 
-        public void DrawESP(SKCanvas canvas, WebRadarPlayer localPlayer)
+        public void DrawESP(SKCanvas canvas, WebRadarPlayer localPlayer, ESPUiConfig espConfig)
         {
-            if (this.HasExfild || !ScreenPositionCalculator.WorldToScreenPositionOnEnemyView(out var point, this, localPlayer))
+            if (this.HasExfild || !ScreenPositionCalculator.WorldToScreenPositionOnEnemyView(out var point, this, localPlayer, espConfig.ScreenWidth, espConfig.ScreenHeight, espConfig.FOV))
             {
                 return;
             }
@@ -109,8 +109,8 @@ namespace AncientMountain.Managed.Data
             var distance = Vector3.Distance(localPlayer.Position, Position);
             var paints = GetPaints(localPlayer);
 
-            canvas.DrawCircle(point, 2 * RadarService.Scale, paints.Item1);
-            canvas.DrawText($"{distance}m", point, paints.Item2);
+            canvas.DrawCircle(point, RadarService.Scale, paints.Item1);
+            canvas.DrawText($"{Name} - {distance}m", point, paints.Item2);
         }
 
         /// <summary>

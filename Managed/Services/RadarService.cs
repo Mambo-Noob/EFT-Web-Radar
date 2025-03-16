@@ -25,7 +25,9 @@ namespace AncientMountain.Managed.Services
 
     public class ESPUiConfig()
     {
-
+        public int ScreenWidth { get; set; } = 1440;
+        public int ScreenHeight { get; set; } = 2560;
+        public float FOV { get; set; } = 70f;
     }
 
     public sealed class RadarService
@@ -49,8 +51,8 @@ namespace AncientMountain.Managed.Services
             { "Sandbox_high", "Ground Zero" }
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-        public static LootUiConfig lootUiConfig { get; set; }
-        public static ESPUiConfig espUiConfig { get; set; }
+        public static LootUiConfig lootUiConfig { get; set; } = new LootUiConfig(50000, 200000, false, false, false, null);
+        public static ESPUiConfig espUiConfig { get; set; } = new ESPUiConfig();
         public static IEnumerable<WebRadarLoot> filteredLoot { get; set; }
 
         private static float _scale = 1f;
@@ -131,7 +133,9 @@ namespace AncientMountain.Managed.Services
                                 player.Draw(canvas, info, mapParams, localPlayer);
                             }
 
-                            filteredLoot = data.Loot.Where(x => (string.IsNullOrEmpty(lootUiConfig.SearchFilter) || x.ShortName.ToLower().Contains(lootUiConfig.SearchFilter.ToLower())) && x.Price > lootUiConfig.MinPrice && !lootUiConfig.ExcludeItems.Contains(x.Id));
+                            filteredLoot = data.Loot.Where(
+                                x => (string.IsNullOrEmpty(lootUiConfig.SearchFilter) || x.ShortName.Contains(lootUiConfig.SearchFilter, StringComparison.CurrentCultureIgnoreCase))
+                                && x.Price > lootUiConfig.MinPrice && !lootUiConfig.ExcludeItems.Contains(x.Id));
                             foreach (var item in filteredLoot)
                             {
                                 item.Draw(canvas, info, mapParams, localPlayer, lootUiConfig);
@@ -180,11 +184,16 @@ namespace AncientMountain.Managed.Services
                             localPlayer ??= data.Players.FirstOrDefault();
                             if (localPlayer is null)
                                 break;
-                            //TODO: use filtered loot
+
+                            filteredLoot = data.Loot.Where(
+                                x => (string.IsNullOrEmpty(lootUiConfig.SearchFilter) || x.ShortName.Contains(lootUiConfig.SearchFilter, StringComparison.CurrentCultureIgnoreCase))
+                                && x.Price > lootUiConfig.MinPrice && !lootUiConfig.ExcludeItems.Contains(x.Id));
+
+                            //Players and items show at weird height (if on the ground or laying down, shows weird)
                             DrawLoot(canvas, localPlayer, filteredLoot);
                             foreach(var p  in data.Players)
                             {
-                                p.DrawESP(canvas, localPlayer);
+                                p.DrawESP(canvas, localPlayer, espUiConfig);
                             }
                         }
                         else
@@ -212,7 +221,7 @@ namespace AncientMountain.Managed.Services
                 foreach (var item in loot)
                 {
                     //Add UILootConfig
-                    item.DrawESP(canvas, localPlayer);
+                    item.DrawESP(canvas, localPlayer, lootUiConfig, espUiConfig);
                 }
             }
         }

@@ -18,6 +18,11 @@ html, body {
     font-size: 16px;
 }
 
+.input-group {
+    display: inline-block;
+    margin-right: 10px;
+}
+
 .host-input {
     width: 200px; /* Width for host input */
 }
