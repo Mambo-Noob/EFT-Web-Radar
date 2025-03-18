@@ -51,6 +51,7 @@ namespace AncientMountain.Managed.Services
             { "Sandbox_high", "Ground Zero" }
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
+        //Should save all of this to local storage so it lasts a refresh and on esp link
         public static LootUiConfig lootUiConfig { get; set; } = new LootUiConfig(50000, 200000, false, false, false, null);
         public static ESPUiConfig espUiConfig { get; set; } = new ESPUiConfig();
         public static IEnumerable<WebRadarLoot> filteredLoot { get; set; }
@@ -126,7 +127,7 @@ namespace AncientMountain.Managed.Services
                             // Draw other players
                             var allPlayers = data.Players
                                 .Where(x => !x.HasExfild); // Skip exfil'd players
-                            playerNames = allPlayers.Where(x => x.Type == WebPlayerType.LocalPlayer || x.Type == WebPlayerType.Teammate).Select(x => x.Name);
+                            playerNames = allPlayers.Where(x => x.Type == WebPlayerType.LocalPlayer || x.Type == WebPlayerType.Player || x.Type == WebPlayerType.Teammate).Select(x => x.Name);
                                                            
                             foreach (var player in allPlayers)
                             {
@@ -191,10 +192,13 @@ namespace AncientMountain.Managed.Services
                                 x => (string.IsNullOrEmpty(lootUiConfig.SearchFilter) || x.ShortName.Contains(lootUiConfig.SearchFilter, StringComparison.CurrentCultureIgnoreCase))
                                 && x.Price > lootUiConfig.MinPrice && !lootUiConfig.ExcludeItems.Contains(x.Id)).OrderByDescending(x => x.Price);
 
+                            var allPlayers = data.Players.Where(x => !x.HasExfild);
+                            playerNames = allPlayers.Where(x => x.Type == WebPlayerType.LocalPlayer || x.Type == WebPlayerType.Player || x.Type == WebPlayerType.Teammate).Select(x => x.Name);
+
                             //Players and items show at weird height (if on the ground or laying down, shows weird)
                             //Scaling is a bit off on the screen. Straight head is good but corner of screens are off
                             DrawLoot(canvas, localPlayer, filteredLoot);
-                            foreach(var p  in data.Players)
+                            foreach(var p in allPlayers)
                             {
                                 p.DrawESP(canvas, localPlayer, espUiConfig);
                             }

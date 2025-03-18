@@ -79,17 +79,21 @@ namespace AncientMountain.Managed.Data
 
         public void DrawESP(SKCanvas canvas, WebRadarPlayer localPlayer, LootUiConfig lootUiConfig, ESPUiConfig espConfig)
         {
+            var distance = Vector3.Distance(localPlayer.Position, Position);
+            if (distance > 200)
+            {
+                return;
+            }
             if (!ScreenPositionCalculator.WorldToScreenPositionOnEnemyView(out var point, this, localPlayer, espConfig.ScreenWidth, espConfig.ScreenHeight, espConfig.FOV))
             {
                 return;
             }
 
-            var distance = Vector3.Distance(localPlayer.Position, Position);
             var paints = GetPaints(lootUiConfig);
 
             canvas.DrawCircle(point, RadarService.Scale, paints.Item1);
             //Make this more like local radar
-            canvas.DrawText($"{ShortName} - {Price} - {distance}m", point, paints.Item2);
+            canvas.DrawText($"{ShortName} - {Price} - {distance.ToString("n2")}m", point, paints.Item2);
         }
 
         private ValueTuple<SKPaint, SKPaint> GetPaints(LootUiConfig lootConfig)

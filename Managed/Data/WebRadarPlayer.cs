@@ -101,16 +101,21 @@ namespace AncientMountain.Managed.Data
 
         public void DrawESP(SKCanvas canvas, WebRadarPlayer localPlayer, ESPUiConfig espConfig)
         {
+            var distance = Vector3.Distance(localPlayer.Position, Position);
+            if (distance > 500)
+            {
+                return;
+            }
+
             if (this.HasExfild || !ScreenPositionCalculator.WorldToScreenPositionOnEnemyView(out var point, this, localPlayer, espConfig.ScreenWidth, espConfig.ScreenHeight, espConfig.FOV))
             {
                 return;
             }
 
-            var distance = Vector3.Distance(localPlayer.Position, Position);
             var paints = GetPaints(localPlayer);
 
             canvas.DrawCircle(point, RadarService.Scale, paints.Item1);
-            canvas.DrawText($"{Name} - {distance}m", point, paints.Item2);
+            canvas.DrawText($"{Name} - {distance.ToString("n2")}m", point, paints.Item2);
         }
 
         /// <summary>
