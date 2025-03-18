@@ -40,57 +40,52 @@ namespace AncientMountain.Managed.Services
 
             // Get the vector from player to entity
             Vector3 playerToEntity = entity.Position - lPlayer.Position;
-            float distanceToEntity = playerToEntity.Length();
 
-            // If entity is too close, calculations might be unstable
-            if (distanceToEntity < 0.001f)
-                return false;
-
-            // Calculate the normalized direction to entity
-            Vector3 directionToEnemy = playerToEntity / distanceToEntity;
-
-            // Get the player's view vectors - using consistent world up vector
-            Vector3 worldUp = new Vector3(0, 1, 0);
+            // Get player's view matrix components
             Vector3 lPlayerForward = Vector3.Normalize(RotationToDirection(lPlayer.Rotation));
+            Vector3 worldUp = new Vector3(0, 1, 0);
 
-            // Ensure the forward vector isn't nearly parallel to world up
-            if (Math.Abs(Vector3.Dot(lPlayerForward, worldUp)) > 0.9999f)
+            // Handle edge case when looking directly up/down
+            float upDot = Vector3.Dot(lPlayerForward, worldUp);
+            if (Math.Abs(upDot) > 0.9999f)
             {
-                // Use a different temporary up vector if looking straight up/down
-                worldUp = new Vector3(0, 0, 1);
+                worldUp = new Vector3(1, 0, 0); // Use a different up vector if looking straight up/down
             }
 
-            // Calculate right vector (player's view right direction)
-            Vector3 lPlayerRight = -Vector3.Normalize(Vector3.Cross(lPlayerForward, worldUp));
+            // Calculate view matrix vectors
+            Vector3 lPlayerRight = Vector3.Normalize(Vector3.Cross(worldUp, lPlayerForward));
+            Vector3 lPlayerUp = Vector3.Normalize(Vector3.Cross(lPlayerForward, lPlayerRight));
 
-            // Calculate true up vector (player's view up direction)
-            Vector3 lPlayerUp = -Vector3.Normalize(Vector3.Cross(lPlayerRight, lPlayerForward));
+            // Transform the point to view space
+            // This is equivalent to multiplying by the inverse of the view matrix
+            float viewX = Vector3.Dot(playerToEntity, lPlayerRight);
+            float viewY = Vector3.Dot(playerToEntity, lPlayerUp);
+            float viewZ = Vector3.Dot(playerToEntity, lPlayerForward);
+
+            // If behind camera, don't render
+            if (viewZ <= 0.001f)
+                return false;
 
             // Convert horizontal FOV to radians
             float hFovRad = horizontalFOV * (float)Math.PI / 180f;
-
-            // Calculate vertical FOV based on aspect ratio
             float aspectRatio = (float)screenWidth / screenHeight;
-            float vFovRad = 2 * (float)Math.Atan(Math.Tan(hFovRad / 2) / aspectRatio);
 
-            // Calculate dot products to determine the position in view space
-            float dotForward = Vector3.Dot(directionToEnemy, lPlayerForward);
+            // Calculate the projection parameters
+            float nearPlane = 0.1f; // Assuming a near plane distance
 
-            // If entity is behind player, don't render
-            if (dotForward <= 0.001f)
-                return false;
+            // Calculate projection matrix factors
+            float projectionX = 1.0f / (float)Math.Tan(hFovRad / 2);
+            float projectionY = aspectRatio / (float)Math.Tan(hFovRad / 2);
 
-            // Calculate normalized screen coordinates
-            float dotRight = Vector3.Dot(directionToEnemy, lPlayerRight);
-            float dotUp = Vector3.Dot(directionToEnemy, lPlayerUp);
+            // Apply perspective division (z-divide)
+            float ndcX = (viewX / viewZ) * projectionX;
+            float ndcY = (viewY / viewZ) * projectionY;
 
-            // Convert to tangent space
-            float tanX = dotRight / dotForward;
-            float tanY = dotUp / dotForward;
-
-            // Calculate normalized device coordinates based on FOV
-            float ndcX = tanX / (float)Math.Tan(hFovRad / 2);
-            float ndcY = tanY / (float)Math.Tan(vFovRad / 2);
+            // Apply correct non-linear projection for edge-case correction
+            // This applies a slight correction to reduce edge distortion
+            float correctionFactor = 1.0f + (ndcX * ndcX + ndcY * ndcY) * 0.1f;
+            ndcX /= correctionFactor;
+            ndcY /= correctionFactor;
 
             // Check if the position is within the screen bounds
             if (Math.Abs(ndcX) > 1 || Math.Abs(ndcY) > 1)
@@ -98,7 +93,7 @@ namespace AncientMountain.Managed.Services
 
             // Convert NDC to screen coordinates (pixel coordinates)
             screenPos.X = (ndcX + 1) * screenWidth / 2;
-            screenPos.Y = (1 - ndcY) * screenHeight / 2; // Invert Y as screen coordinates go from top to bottom
+            screenPos.Y = (1 - ndcY) * screenHeight / 2; // Invert Y for screen coordinates
 
             return true;
         }

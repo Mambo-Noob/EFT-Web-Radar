@@ -51,6 +51,7 @@ namespace AncientMountain.Managed.Services
             { "Sandbox_high", "Ground Zero" }
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
+        //Should save all of this to local storage so it lasts a refresh and on esp link
         public static LootUiConfig lootUiConfig { get; set; } = new LootUiConfig(50000, 200000, false, false, false, null);
         public static ESPUiConfig espUiConfig { get; set; } = new ESPUiConfig();
         public static IEnumerable<WebRadarLoot> filteredLoot { get; set; }
