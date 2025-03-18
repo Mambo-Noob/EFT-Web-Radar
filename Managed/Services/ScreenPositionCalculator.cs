@@ -40,68 +40,69 @@ namespace AncientMountain.Managed.Services
 
             // Get vector from player to entity
             Vector3 deltaVector = entity.Position - lPlayer.Position;
+            float distanceToEntity = deltaVector.Length();
 
-            // First check if entity is approximately in front of the player
+            // Get player's view orientation
             Vector3 viewDirection = Vector3.Normalize(RotationToDirection(lPlayer.Rotation));
-            float dotProduct = Vector3.Dot(Vector3.Normalize(deltaVector), viewDirection);
 
-            // If entity is behind player (not in field of view), return false
-            if (dotProduct <= 0.0f)
-            {
-                return false;
-            }
-
-            // Calculate FOV in radians
-            float hFovRadians = horizontalFOV * (float)Math.PI / 180.0f;
-
-            // Calculate the forward, right, and up vectors for the view matrix
+            // Calculate the basis vectors for the view matrix
             Vector3 forward = viewDirection;
             Vector3 worldUp = new Vector3(0, 1, 0);
-
-            // Avoid issues when looking straight up or down
-            if (Math.Abs(Vector3.Dot(forward, worldUp)) > 0.99f)
-            {
-                worldUp = forward.Y > 0 ? new Vector3(0, 0, -1) : new Vector3(0, 0, 1);
-            }
-
             Vector3 right = Vector3.Normalize(Vector3.Cross(worldUp, forward));
-            Vector3 up = Vector3.Normalize(Vector3.Cross(forward, right));
+            Vector3 up = Vector3.Normalize(Vector3.Cross(right, forward)); // Note the order
 
             // Calculate view-space coordinates
-            float rightDot = Vector3.Dot(deltaVector, right);
-            float upDot = Vector3.Dot(deltaVector, up);
-            float forwardDot = Vector3.Dot(deltaVector, forward);
+            float xView = Vector3.Dot(deltaVector, right);
+            float yView = Vector3.Dot(deltaVector, up);
+            float zView = Vector3.Dot(deltaVector, forward);
 
-            // Early exit if entity is behind camera
-            if (forwardDot <= 0.1f)
+            // If entity is behind camera, don't render
+            if (zView <= 0.1f)
             {
                 return false;
             }
 
-            // Calculate the angle from forward vector to the entity
-            float horizontalAngle = (float)Math.Atan2(rightDot, forwardDot);
-            float verticalAngle = (float)Math.Atan2(upDot, forwardDot);
-
-            // Calculate aspect ratio and vertical FOV
+            // Calculate FOV and aspect ratio
+            float hFovRadians = horizontalFOV * (float)Math.PI / 180.0f;
             float aspectRatio = (float)screenWidth / screenHeight;
             float vFovRadians = 2.0f * (float)Math.Atan(Math.Tan(hFovRadians / 2.0f) / aspectRatio);
 
-            // Check if entity is within field of view
-            float halfHFov = hFovRadians / 2.0f;
-            float halfVFov = vFovRadians / 2.0f;
+            // Calculate screen position using perspective projection
+            float tanHalfHFov = (float)Math.Tan(hFovRadians / 2.0f);
+            float tanHalfVFov = (float)Math.Tan(vFovRadians / 2.0f);
 
-            if (Math.Abs(horizontalAngle) > halfHFov || Math.Abs(verticalAngle) > halfVFov)
+            // Calculate projected coordinates
+            float xProj = xView / (zView * tanHalfHFov);
+            float yProj = yView / (zView * tanHalfVFov);
+
+            // Apply a vertical correction factor based on pitch angle and distance
+            // This helps with the "floating" effect when looking down at objects
+            float pitchAngle = (float)Math.Asin(viewDirection.Y);
+            float verticalCorrection = 0;
+
+            if (Math.Abs(pitchAngle) > 0.1f) // If looking up or down significantly
+            {
+                // Calculate a correction factor based on pitch angle and distance
+                // This dampens the vertical displacement for distant objects
+                float pitchFactor = (float)Math.Sin(pitchAngle);
+                float distanceFactor = Math.Min(1.0f, 10.0f / Math.Max(distanceToEntity, 1.0f));
+
+                // Apply stronger correction when looking down at objects (when pitchAngle is negative)
+                verticalCorrection = pitchFactor * distanceFactor * 0.5f;
+
+                // Apply the correction to the Y projection
+                yProj -= verticalCorrection;
+            }
+
+            // Check if the projected point is within the view frustum
+            if (Math.Abs(xProj) > 1.0f || Math.Abs(yProj) > 1.0f)
             {
                 return false;
             }
 
-            // Convert angles to normalized device coordinates (-1 to 1)
-            float ndcX = horizontalAngle / halfHFov;
-            float ndcY = verticalAngle / halfVFov;
-
             // Convert to screen coordinates
-            screenPos.X = (ndcX + 1.0f) * 0.5f * screenWidth;
-            screenPos.Y = (1.0f - (ndcY + 1.0f) * 0.5f) * screenHeight; // Flip Y axis
+            screenPos.X = (xProj + 1.0f) * 0.5f * screenWidth;
+            screenPos.Y = (1.0f - (yProj + 1.0f) * 0.5f) * screenHeight;
 
             return true;
         }
