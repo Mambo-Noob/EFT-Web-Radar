@@ -38,62 +38,55 @@ namespace AncientMountain.Managed.Services
         {
             screenPos = new SKPoint(0, 0);
 
-            // Get the vector from player to entity
+            // Get the vector from player to entity in world space
             Vector3 playerToEntity = entity.Position - lPlayer.Position;
 
-            // Get player's view matrix components
+            // Get player's view direction
             Vector3 lPlayerForward = Vector3.Normalize(RotationToDirection(lPlayer.Rotation));
-            Vector3 worldUp = new Vector3(0, 1, 0);
-
-            // Handle edge case when looking directly up/down
-            float upDot = Vector3.Dot(lPlayerForward, worldUp);
-            if (Math.Abs(upDot) > 0.9999f)
-            {
-                worldUp = new Vector3(1, 0, 0); // Use a different up vector if looking straight up/down
-            }
 
             // Calculate view matrix vectors
+            // Use a consistent world up vector
+            Vector3 worldUp = new Vector3(0, 1, 0);
+
+            // Handle the case when looking directly up/down
+            if (Math.Abs(Vector3.Dot(lPlayerForward, worldUp)) > 0.99f)
+            {
+                worldUp = new Vector3(1, 0, 0); // Use a different up vector
+            }
+
+            // Right vector is perpendicular to both forward and world up
             Vector3 lPlayerRight = Vector3.Normalize(Vector3.Cross(worldUp, lPlayerForward));
+
+            // Up vector must be perpendicular to both forward and right
             Vector3 lPlayerUp = Vector3.Normalize(Vector3.Cross(lPlayerForward, lPlayerRight));
 
-            // Transform the point to view space
-            // This is equivalent to multiplying by the inverse of the view matrix
+            // Project the player-to-entity vector onto the view space
             float viewX = Vector3.Dot(playerToEntity, lPlayerRight);
             float viewY = Vector3.Dot(playerToEntity, lPlayerUp);
             float viewZ = Vector3.Dot(playerToEntity, lPlayerForward);
 
-            // If behind camera, don't render
-            if (viewZ <= 0.001f)
+            // Entity is behind the camera
+            if (viewZ <= 0.01f)
                 return false;
 
-            // Convert horizontal FOV to radians
+            // Convert FOV to radians
             float hFovRad = horizontalFOV * (float)Math.PI / 180f;
             float aspectRatio = (float)screenWidth / screenHeight;
 
-            // Calculate the projection parameters
-            float nearPlane = 0.1f; // Assuming a near plane distance
+            // Calculate vertical FOV
+            float vFovRad = 2 * (float)Math.Atan(Math.Tan(hFovRad / 2) / aspectRatio);
 
-            // Calculate projection matrix factors
-            float projectionX = 1.0f / (float)Math.Tan(hFovRad / 2);
-            float projectionY = aspectRatio / (float)Math.Tan(hFovRad / 2);
+            // Calculate NDC coordinates using direct perspective projection
+            float ndcX = viewX / (viewZ * (float)Math.Tan(hFovRad / 2));
+            float ndcY = viewY / (viewZ * (float)Math.Tan(vFovRad / 2));
 
-            // Apply perspective division (z-divide)
-            float ndcX = (viewX / viewZ) * projectionX;
-            float ndcY = (viewY / viewZ) * projectionY;
-
-            // Apply correct non-linear projection for edge-case correction
-            // This applies a slight correction to reduce edge distortion
-            float correctionFactor = 1.0f + (ndcX * ndcX + ndcY * ndcY) * 0.1f;
-            ndcX /= correctionFactor;
-            ndcY /= correctionFactor;
-
-            // Check if the position is within the screen bounds
-            if (Math.Abs(ndcX) > 1 || Math.Abs(ndcY) > 1)
+            // If entity is outside the view frustum, don't render
+            if (Math.Abs(ndcX) > 1.0f || Math.Abs(ndcY) > 1.0f)
                 return false;
 
-            // Convert NDC to screen coordinates (pixel coordinates)
-            screenPos.X = (ndcX + 1) * screenWidth / 2;
-            screenPos.Y = (1 - ndcY) * screenHeight / 2; // Invert Y for screen coordinates
+            // Convert NDC to screen coordinates
+            screenPos.X = (ndcX + 1.0f) * 0.5f * screenWidth;
+            screenPos.Y = (1.0f - ndcY) * 0.5f * screenHeight;
 
             return true;
         }
