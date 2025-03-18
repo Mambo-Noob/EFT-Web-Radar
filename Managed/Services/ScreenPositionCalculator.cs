@@ -62,8 +62,16 @@ namespace AncientMountain.Managed.Services
                 return false;
             }
 
+            // Dynamically calculate FOV
+            float effectiveFOV = horizontalFOV;
+            if (entity.Position.Z < lPlayer.Position.Z)
+            {
+                // Slightly reduce FOV for objects behind the player's forward direction
+                effectiveFOV *= 0.95f;
+            }
+
             // Calculate FOV and aspect ratio
-            float hFovRadians = horizontalFOV * (float)Math.PI / 180.0f;
+            float hFovRadians = effectiveFOV * (float)Math.PI / 180.0f;
             float aspectRatio = (float)screenWidth / screenHeight;
             float vFovRadians = 2.0f * (float)Math.Atan(Math.Tan(hFovRadians / 2.0f) / aspectRatio);
 
@@ -76,35 +84,84 @@ namespace AncientMountain.Managed.Services
             float yProj = yView / (zView * tanHalfVFov);
 
             // Apply a vertical correction factor based on pitch angle and distance
-            // This helps with the "floating" effect when looking down at objects
             float pitchAngle = (float)Math.Asin(viewDirection.Y);
             float verticalCorrection = 0;
+            float horizontalCorrection = 0;
 
-            if (Math.Abs(pitchAngle) > 0.1f) // If looking up or down significantly
+            // Enhanced distance-based correction
+            float distanceFactor = Math.Max(0.1f, Math.Min(1.0f, 50.0f / distanceToEntity));
+            float scaledCorrection = 0.01f + (1.0f - distanceFactor) * 0.1f;
+
+            // Apply stronger correction for distant objects
+            if (Math.Abs(pitchAngle) > 0.05f)
             {
-                // Calculate a correction factor based on pitch angle and distance
-                // This dampens the vertical displacement for distant objects
                 float pitchFactor = (float)Math.Sin(pitchAngle);
-                float distanceFactor = Math.Min(1.0f, 10.0f / Math.Max(distanceToEntity, 1.0f));
+                verticalCorrection = pitchFactor * scaledCorrection;
 
-                // Apply stronger correction when looking down at objects (when pitchAngle is negative)
-                verticalCorrection = pitchFactor * distanceFactor * 0.5f;
+                // Apply the correction to both X and Y for distant objects
+                horizontalCorrection = pitchFactor * scaledCorrection * 0.3f;
 
-                // Apply the correction to the Y projection
+                // Apply more aggressive correction for very distant objects
+                if (distanceToEntity > 200.0f)
+                {
+                    verticalCorrection *= 1.5f;
+                    horizontalCorrection *= 1.3f;
+                }
+
                 yProj -= verticalCorrection;
+                xProj -= horizontalCorrection * (xProj > 0 ? 1 : -1); // Push toward center horizontally
+            }
+
+            // Apply additional perspective correction for very distant objects
+            if (distanceToEntity > 100.0f)
+            {
+                // Pull very distant objects slightly toward screen center
+                float distanceScale = Math.Min(3.0f, distanceToEntity / 100.0f);
+                float pullFactor = 0.05f * (distanceScale - 1.0f);
+                xProj *= (1.0f - pullFactor);
+                yProj *= (1.0f - pullFactor);
             }
 
             // Check if the projected point is within the view frustum
-            if (Math.Abs(xProj) > 1.0f || Math.Abs(yProj) > 1.0f)
+            bool isFullyVisible = Math.Abs(xProj) <= 1.0f && Math.Abs(yProj) <= 1.0f;
+
+            // Calculate edge padding based on icon size and distance
+            float edgePadding = iconSize * 0.5f; // Half the icon size as padding
+            float edgeDistanceFactor = Math.Min(1.0f, 100.0f / Math.Max(distanceToEntity, 1.0f));
+            edgePadding *= (1.0f + (1.0f - edgeDistanceFactor) * 2.0f); // Increase padding for distant objects
+
+            // Convert to raw screen coordinates
+            float rawX = (xProj + 1.0f) * 0.5f * screenWidth;
+            float rawY = (1.0f - (yProj + 1.0f) * 0.5f) * screenHeight;
+
+            // Clamp to screen edges with padding
+            screenPos.X = Math.Clamp(rawX, edgePadding, screenWidth - edgePadding);
+            screenPos.Y = Math.Clamp(rawY, edgePadding, screenHeight - edgePadding);
+
+            // For very distant objects outside frustum, we still want to show them at the edges
+            if (!isFullyVisible && distanceToEntity > 150.0f)
             {
-                return false;
+                // Calculate normalized direction vector to the entity on screen
+                float dx = xProj;
+                float dy = yProj;
+                float magnitude = (float)Math.Sqrt(dx * dx + dy * dy);
+
+                if (magnitude > 0)
+                {
+                    // Normalize
+                    dx /= magnitude;
+                    dy /= magnitude;
+
+                    // Position at screen edge based on direction
+                    rawX = screenWidth * 0.5f + dx * (screenWidth * 0.5f - edgePadding);
+                    rawY = screenHeight * 0.5f - dy * (screenHeight * 0.5f - edgePadding);
+
+                    screenPos.X = rawX;
+                    screenPos.Y = rawY;
+                }
             }
 
-            // Convert to screen coordinates
-            screenPos.X = (xProj + 1.0f) * 0.5f * screenWidth;
-            screenPos.Y = (1.0f - (yProj + 1.0f) * 0.5f) * screenHeight;
-
-            return true;
+            return true; // Always return true since we're now showing icons even at edges
         }
 
         private static Vector3 RotationToDirection(Vector2 rotation)
