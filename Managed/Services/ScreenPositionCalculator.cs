@@ -38,14 +38,32 @@ namespace AncientMountain.Managed.Services
         {
             screenPos = new SKPoint(0, 0);
 
-            // Calculate the vector from player to enemy
-            Vector3 directionToEnemy = Vector3.Normalize(entity.Position - lPlayer.Position);
+            // Get the vector from player to entity
+            Vector3 playerToEntity = entity.Position - lPlayer.Position;
+            float distanceToEntity = playerToEntity.Length();
 
-            // Get the player's forward direction
+            // If entity is too close, calculations might be unstable
+            if (distanceToEntity < 0.001f)
+                return false;
+
+            // Calculate the normalized direction to entity
+            Vector3 directionToEnemy = playerToEntity / distanceToEntity;
+
+            // Get the player's view vectors - using consistent world up vector
+            Vector3 worldUp = new Vector3(0, 1, 0);
             Vector3 lPlayerForward = Vector3.Normalize(RotationToDirection(lPlayer.Rotation));
 
-            // Calculate right and up vectors for the player's view
-            Vector3 lPlayerRight = -Vector3.Normalize(Vector3.Cross(lPlayerForward, new Vector3(0, 1, 0)));
+            // Ensure the forward vector isn't nearly parallel to world up
+            if (Math.Abs(Vector3.Dot(lPlayerForward, worldUp)) > 0.9999f)
+            {
+                // Use a different temporary up vector if looking straight up/down
+                worldUp = new Vector3(0, 0, 1);
+            }
+
+            // Calculate right vector (player's view right direction)
+            Vector3 lPlayerRight = -Vector3.Normalize(Vector3.Cross(lPlayerForward, worldUp));
+
+            // Calculate true up vector (player's view up direction)
             Vector3 lPlayerUp = -Vector3.Normalize(Vector3.Cross(lPlayerRight, lPlayerForward));
 
             // Convert horizontal FOV to radians
@@ -58,11 +76,11 @@ namespace AncientMountain.Managed.Services
             // Calculate dot products to determine the position in view space
             float dotForward = Vector3.Dot(directionToEnemy, lPlayerForward);
 
-            // If dot product with forward is negative or near zero, the target is behind or to the side
-            if (dotForward <= 0.01f)
+            // If entity is behind player, don't render
+            if (dotForward <= 0.001f)
                 return false;
 
-            // Calculate normalized screen coordinates (-1 to 1)
+            // Calculate normalized screen coordinates
             float dotRight = Vector3.Dot(directionToEnemy, lPlayerRight);
             float dotUp = Vector3.Dot(directionToEnemy, lPlayerUp);
 
