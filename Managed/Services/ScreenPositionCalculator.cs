@@ -38,130 +38,185 @@ namespace AncientMountain.Managed.Services
         {
             screenPos = new SKPoint(0, 0);
 
-            // Get vector from player to entity
-            Vector3 deltaVector = entity.Position - lPlayer.Position;
-            float distanceToEntity = deltaVector.Length();
+            // Create a proper view matrix using camera position and orientation
+            Matrix4x4 viewMatrix = CreateViewMatrix(lPlayer.Position, lPlayer.Rotation);
 
-            // Get player's view orientation
-            Vector3 viewDirection = Vector3.Normalize(RotationToDirection(lPlayer.Rotation));
+            // Create a proper perspective projection matrix
+            Matrix4x4 projMatrix = CreateProjectionMatrix(horizontalFOV, (float)screenWidth / screenHeight, 0.1f, 1000f);
 
-            // Calculate the basis vectors for the view matrix
-            Vector3 forward = viewDirection;
-            Vector3 worldUp = new Vector3(0, 1, 0);
-            Vector3 right = Vector3.Normalize(Vector3.Cross(worldUp, forward));
-            Vector3 up = Vector3.Normalize(Vector3.Cross(right, forward)); // Note the order
+            // Calculate the full view-projection matrix
+            Matrix4x4 viewProjMatrix = Matrix4x4.Multiply(viewMatrix, projMatrix);
 
-            // Calculate view-space coordinates
-            float xView = Vector3.Dot(deltaVector, right);
-            float yView = Vector3.Dot(deltaVector, up);
-            float zView = Vector3.Dot(deltaVector, forward);
+            // Transform entity position to clip space
+            Vector3 entityPosition = entity.Position;
+            Vector4 clipPos = Vector4.Transform(new Vector4(entityPosition.X, entityPosition.Y, entityPosition.Z, 1.0f), viewProjMatrix);
 
-            // If entity is behind camera, don't render
-            if (zView <= 0.1f)
+            // Check if behind camera
+            if (clipPos.W <= 0.0f)
             {
+                // For objects behind, we'll place indicators at screen edges
+                PlaceOffScreenIndicator(out screenPos, entityPosition, lPlayer.Position, lPlayer.Rotation, screenWidth, screenHeight);
                 return false;
             }
 
-            // Dynamically calculate FOV
-            float effectiveFOV = horizontalFOV;
-            if (entity.Position.Z < lPlayer.Position.Z)
+            // Calculate normalized device coordinates by perspective division
+            float invW = 1.0f / clipPos.W;
+            float ndcX = clipPos.X * invW;
+            float ndcY = clipPos.Y * invW;
+            float ndcZ = clipPos.Z * invW;
+
+            // Calculate distance for scaling
+            float distance = Vector3.Distance(entityPosition, lPlayer.Position);
+
+            // Check if object is within NDC bounds
+            bool isInView = ndcX >= -1.0f && ndcX <= 1.0f && ndcY >= -1.0f && ndcY <= 1.0f && ndcZ >= 0.0f && ndcZ <= 1.0f;
+
+            if (!isInView)
             {
-                // Slightly reduce FOV for objects behind the player's forward direction
-                effectiveFOV *= 0.95f;
+                // Handle off-screen indicators with proper edge clamping
+                PlaceOffScreenIndicator(out screenPos, entityPosition, lPlayer.Position, lPlayer.Rotation, screenWidth, screenHeight);
+                return false;
             }
 
-            // Calculate FOV and aspect ratio
-            float hFovRadians = effectiveFOV * (float)Math.PI / 180.0f;
-            float aspectRatio = (float)screenWidth / screenHeight;
-            float vFovRadians = 2.0f * (float)Math.Atan(Math.Tan(hFovRadians / 2.0f) / aspectRatio);
+            // Convert from NDC to screen space
+            float screenX = (ndcX + 1.0f) * 0.5f * screenWidth;
+            float screenY = (1.0f - (ndcY + 1.0f) * 0.5f) * screenHeight;
 
-            // Calculate screen position using perspective projection
-            float tanHalfHFov = (float)Math.Tan(hFovRadians / 2.0f);
-            float tanHalfVFov = (float)Math.Tan(vFovRadians / 2.0f);
+            // Apply distance-based corrections
+            ApplyDistanceBasedCorrections(ref screenX, ref screenY, distance, ndcX, ndcY, screenWidth, screenHeight);
 
-            // Calculate projected coordinates
-            float xProj = xView / (zView * tanHalfHFov);
-            float yProj = yView / (zView * tanHalfVFov);
+            screenPos.X = screenX;
+            screenPos.Y = screenY;
 
-            // Apply a vertical correction factor based on pitch angle and distance
-            float pitchAngle = (float)Math.Asin(viewDirection.Y);
-            float verticalCorrection = 0;
-            float horizontalCorrection = 0;
+            return true;
+        }
 
-            // Enhanced distance-based correction
-            float distanceFactor = Math.Max(0.1f, Math.Min(1.0f, 50.0f / distanceToEntity));
-            float scaledCorrection = 0.01f + (1.0f - distanceFactor) * 0.1f;
+        private static Matrix4x4 CreateViewMatrix(Vector3 cameraPosition, Vector2 rotation)
+        {
+            // Convert rotation (yaw, pitch) to direction vectors
+            float yawRad = (float)rotation.X.ToRadians();
+            float pitchRad = (float)rotation.Y.ToRadians();
 
-            // Apply stronger correction for distant objects
-            if (Math.Abs(pitchAngle) > 0.05f)
+            // Calculate view direction
+            Vector3 forward = new Vector3(
+                (float)(Math.Cos(pitchRad) * Math.Sin(yawRad)),
+                (float)Math.Sin(-pitchRad),
+                (float)(Math.Cos(pitchRad) * Math.Cos(yawRad))
+            );
+            forward = Vector3.Normalize(forward);
+
+            // Calculate right and up vectors
+            Vector3 worldUp = new Vector3(0, 1, 0);
+            Vector3 right = Vector3.Normalize(Vector3.Cross(worldUp, forward));
+            Vector3 up = Vector3.Normalize(Vector3.Cross(forward, right));
+
+            // Create view matrix components
+            Matrix4x4 rotationMatrix = new Matrix4x4(
+                right.X, up.X, forward.X, 0,
+                right.Y, up.Y, forward.Y, 0,
+                right.Z, up.Z, forward.Z, 0,
+                0, 0, 0, 1
+            );
+
+            Matrix4x4 translationMatrix = Matrix4x4.CreateTranslation(-cameraPosition);
+
+            // Combine rotation and translation
+            return Matrix4x4.Multiply(translationMatrix, rotationMatrix);
+        }
+
+        private static Matrix4x4 CreateProjectionMatrix(float fovDegrees, float aspectRatio, float nearPlane, float farPlane)
+        {
+            float fovRadians = fovDegrees * (float)Math.PI / 180.0f;
+            float yScale = 1.0f / (float)Math.Tan(fovRadians * 0.5f);
+            float xScale = yScale / aspectRatio;
+            float farMinusNear = farPlane - nearPlane;
+
+            return new Matrix4x4(
+                xScale, 0, 0, 0,
+                0, yScale, 0, 0,
+                0, 0, farPlane / farMinusNear, 1,
+                0, 0, -nearPlane * farPlane / farMinusNear, 0
+            );
+        }
+
+        private static void PlaceOffScreenIndicator(out SKPoint screenPos, Vector3 entityPosition, Vector3 cameraPosition, Vector2 cameraRotation, int screenWidth, int screenHeight)
+        {
+            screenPos = new SKPoint(0, 0);
+            // Calculate vector from camera to entity
+            Vector3 dirToEntity = entityPosition - cameraPosition;
+
+            // Get camera's forward direction
+            float yawRad = (float)cameraRotation.X.ToRadians();
+            float pitchRad = (float)cameraRotation.Y.ToRadians();
+            Vector3 cameraForward = new Vector3(
+                (float)(Math.Cos(pitchRad) * Math.Sin(yawRad)),
+                (float)Math.Sin(-pitchRad),
+                (float)(Math.Cos(pitchRad) * Math.Cos(yawRad))
+            );
+            cameraForward = Vector3.Normalize(cameraForward);
+
+            // Get camera's right and up vectors
+            Vector3 worldUp = new Vector3(0, 1, 0);
+            Vector3 cameraRight = Vector3.Normalize(Vector3.Cross(worldUp, cameraForward));
+            Vector3 cameraUp = Vector3.Normalize(Vector3.Cross(cameraForward, cameraRight));
+
+            // Project direction vector onto camera plane
+            float rightComponent = Vector3.Dot(dirToEntity, cameraRight);
+            float upComponent = Vector3.Dot(dirToEntity, cameraUp);
+
+            // Calculate angle (in radians) from forward vector
+            float angleHorizontal = (float)Math.Atan2(rightComponent, Vector3.Dot(dirToEntity, cameraForward));
+            float angleVertical = (float)Math.Atan2(upComponent, Vector3.Dot(dirToEntity, cameraForward));
+
+            // Normalize to screen coordinates
+            float centerX = screenWidth / 2f;
+            float centerY = screenHeight / 2f;
+            float radius = Math.Min(centerX, centerY) * 0.85f; // 85% of half-screen
+
+            // Calculate screen edge point using polar coordinates
+            float screenEdgeX = centerX + radius * (float)Math.Sin(angleHorizontal);
+            float screenEdgeY = centerY - radius * (float)Math.Sin(angleVertical);
+
+            // Ensure the indicator stays within screen bounds with padding
+            float padding = 30f;
+            screenPos.X = Math.Clamp(screenEdgeX, padding, screenWidth - padding);
+            screenPos.Y = Math.Clamp(screenEdgeY, padding, screenHeight - padding);
+        }
+
+        private static void ApplyDistanceBasedCorrections(ref float screenX, ref float screenY, float distance, float ndcX, float ndcY, int screenWidth, int screenHeight)
+        {
+            // Parameters to tune correction behavior
+            float maxDistanceForFullCorrection = 100f;
+            float minCorrectionFactor = 0.01f;
+            float maxCorrectionFactor = 0.15f;
+
+            // Calculate distance-based scaling factor
+            float distanceFactor = Math.Min(1f, maxDistanceForFullCorrection / Math.Max(1f, distance));
+            float correctionStrength = minCorrectionFactor + (1f - distanceFactor) * (maxCorrectionFactor - minCorrectionFactor);
+
+            // Apply stronger correction for distant objects near screen edges
+            float edgeFactor = Math.Max(Math.Abs(ndcX), Math.Abs(ndcY));
+            if (edgeFactor > 0.7f) // Objects near the edges
             {
-                float pitchFactor = (float)Math.Sin(pitchAngle);
-                verticalCorrection = pitchFactor * scaledCorrection;
+                float edgeCorrection = (edgeFactor - 0.7f) / 0.3f; // 0 to 1 scale for edge proximity
+                correctionStrength *= (1f + edgeCorrection);
 
-                // Apply the correction to both X and Y for distant objects
-                horizontalCorrection = pitchFactor * scaledCorrection * 0.3f;
+                // Pull towards center based on distance and edge factor
+                float centerPull = correctionStrength * edgeCorrection;
+                float centerX = screenWidth / 2f;
+                float centerY = screenHeight / 2f;
 
-                // Apply more aggressive correction for very distant objects
-                if (distanceToEntity > 200.0f)
-                {
-                    verticalCorrection *= 1.5f;
-                    horizontalCorrection *= 1.3f;
-                }
-
-                yProj -= verticalCorrection;
-                xProj -= horizontalCorrection * (xProj > 0 ? 1 : -1); // Push toward center horizontally
+                screenX = screenX * (1f - centerPull) + centerX * centerPull;
+                screenY = screenY * (1f - centerPull) + centerY * centerPull;
             }
 
-            // Apply additional perspective correction for very distant objects
-            if (distanceToEntity > 100.0f)
+            // Fine-tune vertical position based on object height relative to player
+            if (distance > 50f)
             {
-                // Pull very distant objects slightly toward screen center
-                float distanceScale = Math.Min(3.0f, distanceToEntity / 100.0f);
-                float pullFactor = 0.05f * (distanceScale - 1.0f);
-                xProj *= (1.0f - pullFactor);
-                yProj *= (1.0f - pullFactor);
+                // Apply additional adjustment for very distant objects
+                float verticalAdjustment = correctionStrength * 0.5f;
+                screenY = screenY * (1f - verticalAdjustment) + (screenHeight / 2f) * verticalAdjustment;
             }
-
-            // Check if the projected point is within the view frustum
-            bool isFullyVisible = Math.Abs(xProj) <= 1.0f && Math.Abs(yProj) <= 1.0f;
-
-            // Calculate edge padding based on icon size and distance
-            float edgePadding = iconSize * 0.5f; // Half the icon size as padding
-            float edgeDistanceFactor = Math.Min(1.0f, 100.0f / Math.Max(distanceToEntity, 1.0f));
-            edgePadding *= (1.0f + (1.0f - edgeDistanceFactor) * 2.0f); // Increase padding for distant objects
-
-            // Convert to raw screen coordinates
-            float rawX = (xProj + 1.0f) * 0.5f * screenWidth;
-            float rawY = (1.0f - (yProj + 1.0f) * 0.5f) * screenHeight;
-
-            // Clamp to screen edges with padding
-            screenPos.X = Math.Clamp(rawX, edgePadding, screenWidth - edgePadding);
-            screenPos.Y = Math.Clamp(rawY, edgePadding, screenHeight - edgePadding);
-
-            // For very distant objects outside frustum, we still want to show them at the edges
-            if (!isFullyVisible && distanceToEntity > 150.0f)
-            {
-                // Calculate normalized direction vector to the entity on screen
-                float dx = xProj;
-                float dy = yProj;
-                float magnitude = (float)Math.Sqrt(dx * dx + dy * dy);
-
-                if (magnitude > 0)
-                {
-                    // Normalize
-                    dx /= magnitude;
-                    dy /= magnitude;
-
-                    // Position at screen edge based on direction
-                    rawX = screenWidth * 0.5f + dx * (screenWidth * 0.5f - edgePadding);
-                    rawY = screenHeight * 0.5f - dy * (screenHeight * 0.5f - edgePadding);
-
-                    screenPos.X = rawX;
-                    screenPos.Y = rawY;
-                }
-            }
-
-            return true; // Always return true since we're now showing icons even at edges
         }
 
         private static Vector3 RotationToDirection(Vector2 rotation)
