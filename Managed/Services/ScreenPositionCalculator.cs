@@ -38,55 +38,70 @@ namespace AncientMountain.Managed.Services
         {
             screenPos = new SKPoint(0, 0);
 
-            // Get the vector from player to entity in world space
-            Vector3 playerToEntity = entity.Position - lPlayer.Position;
+            // Get vector from player to entity
+            Vector3 deltaVector = entity.Position - lPlayer.Position;
 
-            // Get player's view direction
-            Vector3 lPlayerForward = Vector3.Normalize(RotationToDirection(lPlayer.Rotation));
+            // First check if entity is approximately in front of the player
+            Vector3 viewDirection = Vector3.Normalize(RotationToDirection(lPlayer.Rotation));
+            float dotProduct = Vector3.Dot(Vector3.Normalize(deltaVector), viewDirection);
 
-            // Calculate view matrix vectors
-            // Use a consistent world up vector
-            Vector3 worldUp = new Vector3(0, 1, 0);
-
-            // Handle the case when looking directly up/down
-            if (Math.Abs(Vector3.Dot(lPlayerForward, worldUp)) > 0.99f)
+            // If entity is behind player (not in field of view), return false
+            if (dotProduct <= 0.0f)
             {
-                worldUp = new Vector3(1, 0, 0); // Use a different up vector
+                return false;
             }
 
-            // Right vector is perpendicular to both forward and world up
-            Vector3 lPlayerRight = Vector3.Normalize(Vector3.Cross(worldUp, lPlayerForward));
+            // Calculate FOV in radians
+            float hFovRadians = horizontalFOV * (float)Math.PI / 180.0f;
 
-            // Up vector must be perpendicular to both forward and right
-            Vector3 lPlayerUp = Vector3.Normalize(Vector3.Cross(lPlayerForward, lPlayerRight));
+            // Calculate the forward, right, and up vectors for the view matrix
+            Vector3 forward = viewDirection;
+            Vector3 worldUp = new Vector3(0, 1, 0);
 
-            // Project the player-to-entity vector onto the view space
-            float viewX = Vector3.Dot(playerToEntity, lPlayerRight);
-            float viewY = Vector3.Dot(playerToEntity, lPlayerUp);
-            float viewZ = Vector3.Dot(playerToEntity, lPlayerForward);
+            // Avoid issues when looking straight up or down
+            if (Math.Abs(Vector3.Dot(forward, worldUp)) > 0.99f)
+            {
+                worldUp = forward.Y > 0 ? new Vector3(0, 0, -1) : new Vector3(0, 0, 1);
+            }
 
-            // Entity is behind the camera
-            if (viewZ <= 0.01f)
+            Vector3 right = Vector3.Normalize(Vector3.Cross(worldUp, forward));
+            Vector3 up = Vector3.Normalize(Vector3.Cross(forward, right));
+
+            // Calculate view-space coordinates
+            float rightDot = Vector3.Dot(deltaVector, right);
+            float upDot = Vector3.Dot(deltaVector, up);
+            float forwardDot = Vector3.Dot(deltaVector, forward);
+
+            // Early exit if entity is behind camera
+            if (forwardDot <= 0.1f)
+            {
                 return false;
+            }
 
-            // Convert FOV to radians
-            float hFovRad = horizontalFOV * (float)Math.PI / 180f;
+            // Calculate the angle from forward vector to the entity
+            float horizontalAngle = (float)Math.Atan2(rightDot, forwardDot);
+            float verticalAngle = (float)Math.Atan2(upDot, forwardDot);
+
+            // Calculate aspect ratio and vertical FOV
             float aspectRatio = (float)screenWidth / screenHeight;
+            float vFovRadians = 2.0f * (float)Math.Atan(Math.Tan(hFovRadians / 2.0f) / aspectRatio);
 
-            // Calculate vertical FOV
-            float vFovRad = 2 * (float)Math.Atan(Math.Tan(hFovRad / 2) / aspectRatio);
+            // Check if entity is within field of view
+            float halfHFov = hFovRadians / 2.0f;
+            float halfVFov = vFovRadians / 2.0f;
 
-            // Calculate NDC coordinates using direct perspective projection
-            float ndcX = viewX / (viewZ * (float)Math.Tan(hFovRad / 2));
-            float ndcY = viewY / (viewZ * (float)Math.Tan(vFovRad / 2));
-
-            // If entity is outside the view frustum, don't render
-            if (Math.Abs(ndcX) > 1.0f || Math.Abs(ndcY) > 1.0f)
+            if (Math.Abs(horizontalAngle) > halfHFov || Math.Abs(verticalAngle) > halfVFov)
+            {
                 return false;
+            }
 
-            // Convert NDC to screen coordinates
+            // Convert angles to normalized device coordinates (-1 to 1)
+            float ndcX = horizontalAngle / halfHFov;
+            float ndcY = verticalAngle / halfVFov;
+
+            // Convert to screen coordinates
             screenPos.X = (ndcX + 1.0f) * 0.5f * screenWidth;
-            screenPos.Y = (1.0f - ndcY) * 0.5f * screenHeight;
+            screenPos.Y = (1.0f - (ndcY + 1.0f) * 0.5f) * screenHeight; // Flip Y axis
 
             return true;
         }
