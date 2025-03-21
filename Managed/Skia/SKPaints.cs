@@ -555,6 +555,27 @@ namespace AncientMountain.Managed.Skia
             FilterQuality = SKFilterQuality.Medium
         };
 
+        public static SKPaint PlayerAiming { get; } = new()
+        {
+            Color = SKColors.Aqua,
+            StrokeWidth = 3,
+            Style = SKPaintStyle.Stroke,
+            IsAntialias = true,
+            FilterQuality = SKFilterQuality.Medium
+        };
+
+        public static SKPaint TextPlayerAiming { get; } = new()
+        {
+            SubpixelText = true,
+            Color = SKColors.Aqua,
+            IsStroke = false,
+            TextSize = 12,
+            TextEncoding = SKTextEncoding.Utf8,
+            IsAntialias = true,
+            Typeface = CustomFonts.SKFontFamilyRegular,
+            FilterQuality = SKFilterQuality.Medium
+        };
+
         public static SKPaint PaintTeammate { get; } = new()
         {
             Color = SKColors.LimeGreen,

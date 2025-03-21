@@ -104,6 +104,7 @@ namespace AncientMountain.Managed.Services
                             data.InGame &&
                             data.MapID is string mapID)
                         {
+                            canvas.DrawText($"Draw Latency: {(DateTime.Now - data.SendTime).TotalMilliseconds:0.00}ms", new SKPoint(info.Rect.Left, info.Rect.Top), SKPaints.PaintCorpse);
                             if (!_maps.TryGetValue(mapID, out var map))
                                 map = _maps["default"];
                             var localPlayer = data.Players.FirstOrDefault(x => x.Name?.Equals(localPlayerName, StringComparison.OrdinalIgnoreCase) ?? false);
