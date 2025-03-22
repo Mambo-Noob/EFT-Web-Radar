@@ -34,5 +34,8 @@ namespace AncientMountain.Managed.Data
 
         [Key(4)]
         public IEnumerable<WebRadarLoot> Loot { get; set; }
+
+        [Key(5)]
+        public DateTime SendTime { get; set; }
     }
 }

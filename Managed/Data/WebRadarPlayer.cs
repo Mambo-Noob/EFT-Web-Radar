@@ -41,6 +41,7 @@ namespace AncientMountain.Managed.Data
         /// </summary>
         [Key(5)]
         public System.Numerics.Vector2 Rotation { get; init; }
+        [Key(15)] public bool IsAiming { get; init; }
         /// <summary>
         /// Player has exfil'd/left the raid.
         /// </summary>
@@ -133,6 +134,12 @@ namespace AncientMountain.Managed.Data
 
                 canvas.DrawText(line, point, SKPaints.TextOutline); // Draw outline
                 canvas.DrawText(line, point, paints.Item2); // draw line text
+                point.Offset(0, 12 * RadarService.Scale);
+            }
+            if (IsAiming)
+            {
+                canvas.DrawText("Aiming", point, SKPaints.TextOutline); // Draw outline
+                canvas.DrawText("Aiming", point, paints.Item2); // draw line text
                 point.Offset(0, 12 * RadarService.Scale);
             }
         }

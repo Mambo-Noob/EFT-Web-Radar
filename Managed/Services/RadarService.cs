@@ -4,6 +4,7 @@ using SkiaSharp;
 using SkiaSharp.Views.Blazor;
 using System.Collections.Frozen;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO.Compression;
 using System.Numerics;
 using System.Reflection;
@@ -104,6 +105,10 @@ namespace AncientMountain.Managed.Services
                             data.InGame &&
                             data.MapID is string mapID)
                         {
+                            var corner = new SKPoint(info.Rect.Left, info.Rect.Top);
+                            corner.Offset(0, 12 * RadarService.Scale);
+                            canvas.DrawText($"{(data.SendTime - DateTime.UtcNow).TotalMilliseconds:0.0}ms", corner, SKPaints.PaintCorpse);
+                            
                             if (!_maps.TryGetValue(mapID, out var map))
                                 map = _maps["default"];
                             var localPlayer = data.Players.FirstOrDefault(x => x.Name?.Equals(localPlayerName, StringComparison.OrdinalIgnoreCase) ?? false);
