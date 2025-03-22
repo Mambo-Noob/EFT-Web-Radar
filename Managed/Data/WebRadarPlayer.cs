@@ -136,7 +136,7 @@ namespace AncientMountain.Managed.Data
                 canvas.DrawText(line, point, paints.Item2); // draw line text
                 point.Offset(0, 12 * RadarService.Scale);
             }
-            if (localPlayer.IsAiming)
+            if (IsAiming)
             {
                 canvas.DrawText("Aiming", point, SKPaints.TextOutline); // Draw outline
                 canvas.DrawText("Aiming", point, paints.Item2); // draw line text
