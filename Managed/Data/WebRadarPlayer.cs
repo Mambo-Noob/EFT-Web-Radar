@@ -42,6 +42,7 @@ namespace AncientMountain.Managed.Data
         [Key(5)]
         public System.Numerics.Vector2 Rotation { get; init; }
         [Key(15)] public bool IsAiming { get; init; }
+        [Key(16)] public float ZoomLevel { get; init; }
         /// <summary>
         /// Player has exfil'd/left the raid.
         /// </summary>
