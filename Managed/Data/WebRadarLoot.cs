@@ -84,7 +84,8 @@ namespace AncientMountain.Managed.Data
             {
                 return;
             }
-            if (!ScreenPositionCalculator.WorldToScreenPositionOnEnemyView(out var point, this, localPlayer, espConfig.ScreenWidth, espConfig.ScreenHeight, espConfig.FOV))
+            if (!ScreenPositionCalculator.WorldToScreenPositionOnEnemyView(out var point, this, localPlayer, espConfig.ScreenWidth, espConfig.ScreenHeight,
+                espConfig.FOV, localPlayer.ZoomLevel > 0f ? localPlayer.ZoomLevel : 1f))
             {
                 return;
             }

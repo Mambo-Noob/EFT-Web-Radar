@@ -103,13 +103,17 @@ namespace AncientMountain.Managed.Data
 
         public void DrawESP(SKCanvas canvas, WebRadarPlayer localPlayer, ESPUiConfig espConfig)
         {
+            var corner = new SKPoint(0, 0);
+            corner.Offset(0, 12 * RadarService.Scale);
+            canvas.DrawText($"{localPlayer.ZoomLevel} || {localPlayer.IsAiming}", corner, SKPaints.PaintCorpse);
             var distance = Vector3.Distance(localPlayer.Position, Position);
             if (distance > 500)
             {
                 return;
             }
 
-            if (this.HasExfild || !ScreenPositionCalculator.WorldToScreenPositionOnEnemyView(out var point, this, localPlayer, espConfig.ScreenWidth, espConfig.ScreenHeight, espConfig.FOV))
+            if (this.HasExfild || !ScreenPositionCalculator.WorldToScreenPositionOnEnemyView(out var point, this, localPlayer, espConfig.ScreenWidth,
+                espConfig.ScreenHeight, espConfig.FOV, localPlayer.ZoomLevel > 0f ? localPlayer.ZoomLevel : 1f))
             {
                 return;
             }
@@ -141,7 +145,6 @@ namespace AncientMountain.Managed.Data
             {
                 canvas.DrawText("Aiming", point, SKPaints.TextOutline); // Draw outline
                 canvas.DrawText("Aiming", point, paints.Item2); // draw line text
-                point.Offset(0, 12 * RadarService.Scale);
             }
         }
 
