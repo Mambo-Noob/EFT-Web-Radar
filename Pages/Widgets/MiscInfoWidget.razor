@@ -1,0 +1,180 @@
+@using System.Numerics
+@using AncientMountain.Managed.Data
+@using AncientMountain.Managed.Skia
+@using SkiaSharp
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@code {
+    private bool IsDraggingWidget = false; 
+    private bool Minimized = false;
+    private float WidgetX = 600;  // ✅ Default position (X)
+    private float WidgetY = 200;  // ✅ Default position (Y)
+    private float OffsetX, OffsetY;
+
+    // ✅ Default colors (set from SKPaints)
+    private string AiColor { get; set; } = SKPaints.PaintBot.Color.ToString();
+    private string PlayerColor { get; set; } = SKPaints.PaintPlayer.Color.ToString();
+    private string BossColor { get; set; } = SKPaints.PaintPlayerScav.Color.ToString();
+    private string GuardColor { get; set; } = SKPaints.PaintTeammate.Color.ToString();
+    private string LootColor { get; set; } = SKPaints.PaintLoot.Color.ToString();
+    private string ImportantLootColor { get; set; } = SKPaints.PaintLootImportant.Color.ToString();
+    private string MedsFoodBackpackColor { get; set; } = SKPaints.PaintLootFMB.Color.ToString();
+    private Dictionary<string, string> PlayerColors = new();
+    private List<string> PlayerNames = new() { "Big Pipe", "Birdeye", "Glukhar", "Kaban", "Killa", "Knight" };
+    [Parameter] public bool MiscWidget { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // ✅ Load saved position
+        WidgetX = await LoadSetting("MiscWidgetX", WidgetX);
+        WidgetY = await LoadSetting("MiscWidgetY", WidgetY);
+
+        // ✅ Load saved colors (Global)
+        AiColor = await LoadSetting("AiColor", AiColor);
+        PlayerColor = await LoadSetting("PlayerColor", PlayerColor);
+        BossColor = await LoadSetting("BossColor", BossColor);
+        GuardColor = await LoadSetting("GuardColor", GuardColor);
+        LootColor = await LoadSetting("LootColor", LootColor);
+        ImportantLootColor = await LoadSetting("ImportantLootColor", ImportantLootColor);
+        MedsFoodBackpackColor = await LoadSetting("MedsFoodBackpackColor", MedsFoodBackpackColor);
+
+        // ✅ Load player-specific colors
+        foreach (var name in PlayerNames)
+        {
+            PlayerColors[name] = await LoadSetting(name, SKColors.White.ToString());
+        }
+
+        UpdatePaints();
+    }
+
+    public bool IsOverWidget(MouseEventArgs e)
+    {
+        return e.ClientX >= WidgetX && e.ClientX <= WidgetX + 300 &&
+               e.ClientY >= WidgetY && e.ClientY <= WidgetY + (Minimized ? 30 : 250);
+    }
+
+    public async Task OnMouseDown(MouseEventArgs e)
+    {
+        if (IsOverWidget(e))
+        {
+            IsDraggingWidget = true;
+            OffsetX = (float)e.ClientX - WidgetX;
+            OffsetY = (float)e.ClientY - WidgetY;
+        }
+    }
+
+    public async Task OnMouseMove(MouseEventArgs e)
+    {
+        if (IsDraggingWidget)
+        {
+            WidgetX = (float)e.ClientX - OffsetX;
+            WidgetY = (float)e.ClientY - OffsetY;
+            await SaveSetting("MiscWidgetX", WidgetX);
+            await SaveSetting("MiscWidgetY", WidgetY);
+            StateHasChanged();
+        }
+    }
+
+    public void OnMouseUp(MouseEventArgs e)
+    {
+        IsDraggingWidget = false;
+    }
+
+    private void ToggleMinimize() => Minimized = !Minimized;
+
+    private async Task UpdatePaints()
+    {
+        SKPaints.PaintBot.Color = SKColor.Parse(AiColor);
+        SKPaints.PaintPlayer.Color = SKColor.Parse(PlayerColor);
+        SKPaints.PaintPlayerBoss.Color = SKColor.Parse(BossColor);
+        SKPaints.PaintFollower.Color = SKColor.Parse(GuardColor);
+        SKPaints.PaintLoot.Color = SKColor.Parse(LootColor);
+        SKPaints.PaintLootImportant.Color = SKColor.Parse(ImportantLootColor);
+        SKPaints.PaintLootFMB.Color = SKColor.Parse(MedsFoodBackpackColor);
+
+        // ✅ Save colors to `localStorage`
+        await SaveSetting("AiColor", AiColor);
+        await SaveSetting("PlayerColor", PlayerColor);
+        await SaveSetting("BossColor", BossColor);
+        await SaveSetting("GuardColor", GuardColor);
+        await SaveSetting("LootColor", LootColor);
+        await SaveSetting("ImportantLootColor", ImportantLootColor);
+        await SaveSetting("MedsFoodBackpackColor", MedsFoodBackpackColor);
+    }
+
+    private async Task SaveSetting(string key, object value)
+    {
+        await JS.InvokeVoidAsync("saveSetting", key, value);
+    }
+
+    private async Task<string> LoadSetting(string key, string defaultValue)
+    {
+        var result = await JS.InvokeAsync<string>("loadSetting", key);
+        return string.IsNullOrEmpty(result) ? defaultValue : result;
+    }
+    private async Task<float> LoadSetting(string key, float defaultValue)
+    {
+        var result = await JS.InvokeAsync<float?>("loadSetting", key);
+        return result ?? defaultValue;
+    }
+}
+
+@if (MiscWidget)
+{
+    <div class="widget-container"
+         style="left:@(WidgetX + "px"); top:@(WidgetY + "px"); position: absolute;"
+         @onmousedown="OnMouseDown"
+         @onmousemove="OnMouseMove"
+         @onmouseup="OnMouseUp"
+         @onmouseleave="OnMouseUp">
+
+        <div class="widget-header">
+            <span>Misc Settings</span>
+            <button class="minimize-btn" @onclick="ToggleMinimize">_</button>
+        </div>
+
+            @if (!Minimized)
+            {
+                <div class="widget-body">
+                    <h4>General Colors</h4>
+                    
+                    <label>AI Color:</label>
+                    <input type="color" 
+                           @bind:get="AiColor" 
+                           @bind:set="value => { AiColor = value; UpdatePaints(); }" />
+                
+                    <label>Player Color:</label>
+                    <input type="color" 
+                           @bind:get="PlayerColor" 
+                           @bind:set="value => { PlayerColor = value; UpdatePaints(); }" />
+                
+                    <label>Boss Color:</label>
+                    <input type="color" 
+                           @bind:get="BossColor" 
+                           @bind:set="value => { BossColor = value; UpdatePaints(); }" />
+                
+                    <label>Guard Color:</label>
+                    <input type="color" 
+                           @bind:get="GuardColor" 
+                           @bind:set="value => { GuardColor = value; UpdatePaints(); }" />
+                
+                    <label>Loot Color:</label>
+                    <input type="color" 
+                           @bind:get="LootColor" 
+                           @bind:set="value => { LootColor = value; UpdatePaints(); }" />
+                
+                    <label>Important Loot Color:</label>
+                    <input type="color" 
+                           @bind:get="ImportantLootColor" 
+                           @bind:set="value => { ImportantLootColor = value; UpdatePaints(); }" />
+                
+                    <label>Meds/Food/Backpacks Color:</label>
+                    <input type="color" 
+                           @bind:get="MedsFoodBackpackColor" 
+                           @bind:set="value => { MedsFoodBackpackColor = value; UpdatePaints(); }" />          
+                </div>
+            }
+
+    </div>
+}

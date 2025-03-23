@@ -1,0 +1,178 @@
+@using System.Numerics
+@using AncientMountain.Managed.Data
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@code {
+    private bool IsDraggingWidget = false; 
+    private bool Minimized = false;
+    private float WidgetX = 200;  // ✅ Default position (X)
+    private float WidgetY = 300;  // ✅ Default position (Y)
+    private float OffsetX, OffsetY;
+    private float WidgetWidth = 300; // ✅ Dynamic width
+
+    private List<WebRadarPlayer> Players = new();
+    private WebRadarPlayer LocalPlayer = new();
+
+    [Parameter] public bool PlayerWidget { get; set; }
+    [Parameter] public IEnumerable<WebRadarPlayer> PlayerData { get; set; }
+    [Parameter] public WebRadarPlayer CurrentPlayer { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // ✅ Load saved position
+        WidgetX = await LoadSetting("WidgetX", WidgetX);
+        WidgetY = await LoadSetting("WidgetY", WidgetY);
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (PlayerData is not null && CurrentPlayer is not null)
+        {
+            LocalPlayer = CurrentPlayer;
+    
+            // ✅ Exclude local player and filter out players named "Scav" or "Sniper"
+            Players = PlayerData
+                .Where(p => p.Name != LocalPlayer.Name && !p.Name.Contains("Scav") && !p.Name.Contains("Sniper"))
+                .OrderBy(p => Vector3.Distance(LocalPlayer.Position, p.Position))
+                .ToList();
+    
+            // ✅ Adjust width dynamically
+            AdjustWidgetWidth();
+        }
+    }
+
+
+    private void AdjustWidgetWidth()
+    {
+        float maxColumnWidth = 0;
+    
+        foreach (var player in Players)
+        {
+            maxColumnWidth = Math.Max(maxColumnWidth, MeasureTextWidth(player.Name));
+            maxColumnWidth = Math.Max(maxColumnWidth, MeasureTextWidth(player.Type.ToString()));
+            maxColumnWidth = Math.Max(maxColumnWidth, MeasureTextWidth(player.Value.ToString()));
+            maxColumnWidth = Math.Max(maxColumnWidth, MeasureTextWidth(player.KD.ToString("0.00")) + 40);  // ✅ Extra space for big numbers
+            maxColumnWidth = Math.Max(maxColumnWidth, MeasureTextWidth(player.TotalHoursPlayed.ToString("0.0")) + 40); // ✅ Extra space for hours
+            maxColumnWidth = Math.Max(maxColumnWidth, MeasureTextWidth(GetShortenedWeapon(player.PrimaryWeapon)));
+            maxColumnWidth = Math.Max(maxColumnWidth, MeasureTextWidth($"{(int)Math.Round(Vector3.Distance(LocalPlayer.Position, player.Position))}m"));
+        }
+    
+        WidgetWidth = Math.Clamp(maxColumnWidth + 200, 350, 850); // ✅ More padding, min 350px, max 850px
+    }
+
+
+    private float MeasureTextWidth(string text)
+    {
+        return text.Length * 9f; // ✅ Increased character width for better spacing
+    }
+
+
+    private string GetShortenedWeapon(string weapon)
+    {
+        var words = weapon.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return words.Length > 2 ? $"{words[0]} {words[1]}" : weapon; // ✅ Limit to first two words
+    }
+
+    public bool IsOverWidget(MouseEventArgs e)
+    {
+        return e.ClientX >= WidgetX && e.ClientX <= WidgetX + WidgetWidth &&
+               e.ClientY >= WidgetY && e.ClientY <= WidgetY + (Minimized ? 30 : 250);
+    }
+
+    public async Task OnMouseDown(MouseEventArgs e)
+    {
+        if (IsOverWidget(e))
+        {
+            IsDraggingWidget = true;
+            OffsetX = (float)e.ClientX - WidgetX;
+            OffsetY = (float)e.ClientY - WidgetY;
+        }
+    }
+
+    public async Task OnMouseMove(MouseEventArgs e)
+    {
+        if (IsDraggingWidget)
+        {
+            WidgetX = (float)e.ClientX - OffsetX;
+            WidgetY = (float)e.ClientY - OffsetY;
+            await SavePosition();
+            StateHasChanged();
+        }
+    }
+
+    public void OnMouseUp(MouseEventArgs e)
+    {
+        IsDraggingWidget = false;
+    }
+
+    private void ToggleMinimize()
+    {
+        Minimized = !Minimized;
+    }
+
+    private async Task SavePosition()
+    {
+        await JS.InvokeVoidAsync("saveSetting", "WidgetX", WidgetX);
+        await JS.InvokeVoidAsync("saveSetting", "WidgetY", WidgetY);
+    }
+    private string FormatKD(float kd)
+    {
+        return kd >= 10 ? kd.ToString("0.0") : kd.ToString("0.00"); // ✅ 10+ → 1 decimal, <10 → 2 decimals
+    }
+
+    private async Task<float> LoadSetting(string key, float defaultValue)
+    {
+        var result = await JS.InvokeAsync<float?>("loadSetting", key);
+        return result ?? defaultValue;
+    }
+}
+
+@if (PlayerWidget)
+{
+    <div class="widget-container"
+         style="left:@(WidgetX + "px"); top:@(WidgetY + "px"); width:@(WidgetWidth + "px"); position: absolute;"
+         @onmousedown="OnMouseDown"
+         @onmousemove="OnMouseMove"
+         @onmouseup="OnMouseUp"
+         @onmouseleave="OnMouseUp">
+    
+        <div class="widget-header">
+            <span>Player Info</span>
+            <button class="minimize-btn" @onclick="ToggleMinimize">_</button>
+        </div>
+
+        @if (!Minimized)
+        {
+            <div class="widget-body">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Value</th>
+                            <th>KD</th>
+                            <th>Hours</th>
+                            <th>Primary</th>
+                            <th>Dist</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var player in Players)
+                        {
+                            <tr>
+                                <td>@player.Name</td>
+                                <td>@player.Type</td>
+                                <td>@player.Value</td>
+                                <td>@FormatKD(player.KD)</td>  <!-- ✅ Corrected KD Formatting -->
+                                <td>@player.TotalHoursPlayed.ToString("0.0")</td>
+                                <td>@GetShortenedWeapon(player.PrimaryWeapon)</td>
+                                <td>@((int)Math.Round(Vector3.Distance(LocalPlayer.Position, player.Position)))m</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
