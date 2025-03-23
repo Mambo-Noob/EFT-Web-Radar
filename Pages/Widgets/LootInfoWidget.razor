@@ -148,8 +148,8 @@
                         @foreach (var loot in FilteredLoot)
                         {
 
-                            <tr style="@(() => {return LootFilter.SelectedItemId == loot.Id ? "color: green;" : "";}); cursor: help">
-                                <td onclick="@(() => 
+                            <tr style="@(() => {return LootFilter.SelectedItemId == loot.Id ? "color: green;" : "";})">
+                                <td style="cursor: help" onclick="@(() =>
                                     { 
                                         if (LootFilter.SelectedItemId != loot.Id)
                                         {
