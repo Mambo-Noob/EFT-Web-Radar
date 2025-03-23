@@ -135,19 +135,33 @@
                                @bind:get="LootFilter.ShowBackpacks" 
                                @bind:set="value => { LootFilter.ShowBackpacks = value; SaveFilterSettings(); }" /> Show Backpacks
                     </div>
+                <button @onclick="@(() => LootFilter.ResetFilters())">Clear Filters</button>
                 <table>
                     <thead>
                         <tr>
                             <th>Name</th>
                             <th>Price</th>
+                            <th>Hide</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var loot in FilteredLoot)
                         {
-                            <tr>
-                                <td>@(loot.ShortName.StartsWith("NULL") ? "Backpack" : loot.ShortName)</td>
+                            @* This is causing  backpacks to show up even when show backpacks is unchecked*@
+                            <tr style="@(() => {return LootFilter.SelectedItemId == loot.Id ? "color:green" : "";})">
+                                <td onclick="@(() => 
+                                    { 
+                                        if (LootFilter.SelectedItemId != loot.Id)
+                                        {
+                                            LootFilter.SelectedItemId = loot.Id;
+                                        } else 
+                                        {
+                                            LootFilter.SelectedItemId = null;
+                                        }
+                                    }
+                                )">@(loot.ShortName.StartsWith("NULL") ? "Backpack" : loot.ShortName)</td>
                                 <td>@loot.Price</td>
+                                <td style="color: red;" @onclick="@(() => {LootFilter.ExcludedItems.Add(loot.Id);})">Remove</td>
                             </tr>
                         }
                     </tbody>

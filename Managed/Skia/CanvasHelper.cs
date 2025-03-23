@@ -1,4 +1,6 @@
-﻿using SkiaSharp;
+﻿using AncientMountain.Managed.Data;
+using AncientMountain.Managed.Services;
+using SkiaSharp;
 
 namespace AncientMountain.Managed.Skia
 {
@@ -21,6 +23,12 @@ namespace AncientMountain.Managed.Skia
                 canvas.DrawCircle(point, size, SKPaints.ShapeOutline);
                 canvas.DrawCircle(point, size, paint);
             }
+        }
+
+        public static void DrawLineToPOI(this SKCanvas canvas, IEntity startingEntity, RadarService.MapParameters mapParams, SKPoint interestPoint)
+        {
+            var startPoint = startingEntity.Position.ToMapPos(mapParams.Map).ToZoomedPos(mapParams);
+            canvas.DrawLine(startPoint, interestPoint, SKPaints.POILine);
         }
     }
 }

@@ -73,13 +73,17 @@ namespace AncientMountain.Managed.Data
 
                 DrawLootMarker(canvas, point, localPlayer, Price, lootFilter);
                 DrawLootText(canvas, point, label, lootFilter);
+
+                if (lootFilter.SelectedItemId == this.Id)
+                {
+                    canvas.DrawLineToPOI(localPlayer, mapParams, point);
+                }
             }
             catch
             {
                 // Handle error
             }
         }
-
 
         private void DrawLootMarker(SKCanvas canvas, SKPoint point, WebRadarPlayer localPlayer, int price, LootFilterService lootFilter)
         {

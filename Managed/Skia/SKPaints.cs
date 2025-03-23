@@ -262,6 +262,14 @@ namespace AncientMountain.Managed.Skia
             FilterQuality = SKFilterQuality.Medium
         };
 
+        public static SKPaint POILine { get; } = new()
+        {
+            Color = SKColors.Red,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 3f,
+            IsAntialias = true
+        };
+
         #endregion
     }
 }
