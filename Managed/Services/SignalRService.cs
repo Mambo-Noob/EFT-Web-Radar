@@ -29,6 +29,47 @@ namespace AncientMountain.Managed.Services
             return Task.CompletedTask;
         }
 
+        private static float _scrollDelta = 0;
+        private static float _mouseX = 0;
+        private static float _mouseY = 0;
+
+        /// <summary>
+        /// Gets the latest mouse input, including scroll and position.
+        /// </summary>
+        public static MouseInput GetMouseInput()
+        {
+            return new MouseInput
+            {
+                ScrollDelta = _scrollDelta,
+                MouseX = _mouseX,
+                MouseY = _mouseY
+            };
+        }
+
+        /// <summary>
+        /// Called when the mouse scrolls.
+        /// </summary>
+        public static void OnMouseScroll(float delta)
+        {
+            _scrollDelta = delta;
+        }
+
+        /// <summary>
+        /// Called when the mouse moves.
+        /// </summary>
+        public static void OnMouseMove(float x, float y)
+        {
+            _mouseX = x;
+            _mouseY = y;
+        }
+
+        public class MouseInput
+        {
+            public float ScrollDelta { get; set; }
+            public float MouseX { get; set; }
+            public float MouseY { get; set; }
+        }
+
         /// <summary>
         /// Start the SignalR connection.
         /// </summary>

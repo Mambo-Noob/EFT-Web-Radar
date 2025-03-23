@@ -1,6 +1,9 @@
 ﻿@page "/esp"
+@using AncientMountain.Managed.Data
 @using AncientMountain.Managed.Services
+@using AncientMountain.Pages.Widgets
 @using SkiaSharp.Views.Blazor
+@inject LootFilterService LootFilter
 @inject IJSRuntime js
 @inject SignalRService SignalRService
 @inject RadarService RadarService
@@ -8,9 +11,9 @@
 
 <div class="canvas-container">
     <div class="connection-controls">
-        <label title="Your in-game name. This will make the radar focus on you.">Your Name: </label>
         @if (RadarService.playerNames != null)
         {
+            <label title="Your in-game name. This will make the radar focus on you.">Your Name: </label>
             <select class="name-input" @onchange="playerSelected">
                 <option selected value="localPlayer">select one</option>
                 @foreach (var item in RadarService.playerNames)
@@ -31,18 +34,53 @@
             </div>
         </div>
         <label>FOV: </label> <input @bind="RadarService.espUiConfig.FOV" type="number" />
+        <span class="checkbox-group">
+            <input type="checkbox" @bind="PlayerWidget" />
+            <label title="Enable Player Widgets for additional information.">Player Widget</label>
+        </span>
+
+        <span class="checkbox-group">
+            <input type="checkbox" @bind="LootWidget" />
+            <label title="Enable Loot Widget for additional information.">Loot Widget</label>
+        </span>
+
+        <span class="checkbox-group">
+            <input type="checkbox" @bind="MiscWidget" />
+            <label title="Enable Misc Widget for additional information.">Misc Widget</label>
+        </span>
         <button @onclick="FullScreen">Full Screen</button>
     </div>
     <div id="esp-canvas" class="canvas-wrapper">
         <SkiaSharp.Views.Blazor.SKCanvasView OnPaintSurface="OnPaintSurface" class="skia-canvas" EnableRenderLoop="true" />
     </div>
 </div>
+<p>LootWidget State: @(LootWidget ? "Enabled" : "Disabled")</p>
+
+    @if (LootWidget)
+    {
+        <LootInfoWidget LootWidget="LootWidget"
+                        LootData="SignalRService.Data?.Loot" />
+
+    }
+    @if (MiscWidget)
+    {
+        <MiscInfoWidget MiscWidget="MiscWidget" />
+    }
+    @if (PlayerWidget)
+    {
+        <PlayerInfoWidget PlayerWidget="PlayerWidget"
+                          PlayerData="SignalRService.Data?.Players"
+                          CurrentPlayer="GetLocalPlayer()" />
+    }
 
 @code {
     private string name = "localPlayer";
     private string host = "192.168.50.160";
     private string port = "5000";
     private string password = "password";
+    public bool PlayerWidget { get; set; }
+    public bool LootWidget { get; set; }
+    public bool MiscWidget { get; set; }
 
     protected override async void OnInitialized()
     {
@@ -68,9 +106,18 @@
         await Connect();
     }
 
+    private WebRadarPlayer GetLocalPlayer()
+    {
+        return SignalRService.Data?.Players?
+            .FirstOrDefault(p => p.Name?.Equals(name, StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
     private void OnPaintSurface(SKPaintSurfaceEventArgs args)
     {
-        RadarService.RenderESP(args, name);
+        var filteredLoot = SignalRService.Data?.Loot?.Where(loot => LootFilter.MatchesFilter(loot))
+                      ?? Enumerable.Empty<WebRadarLoot>();
+
+        RadarService.RenderESP(args, name, filteredLoot);
         StateHasChanged();
     }
 

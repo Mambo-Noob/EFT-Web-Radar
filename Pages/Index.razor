@@ -1,4 +1,6 @@
 ﻿@page "/"
+@using AncientMountain.Managed.Data
+@using AncientMountain.Pages.Widgets
 @using SkiaSharp
 @using SkiaSharp.Views.Blazor
 @using AncientMountain.Managed
@@ -8,6 +10,8 @@
 @inject SignalRService SignalRService
 @inject RadarService RadarService
 @inject NavigationManager Navigation
+@inject LootFilterService LootFilter
+@inject IJSRuntime JS
 
 <PageTitle>@windowTitle</PageTitle>
 @if (showAlert)
@@ -17,7 +21,11 @@
         @alertMessage
     </div>
 }
-<div class="canvas-container">
+<div class="canvas-container"
+     @onwheel="OnMouseWheel"
+     @onmousedown="OnMouseDown"
+     @onmousemove="OnMouseMove"
+     @onmouseup="OnMouseUp">
     <div class="connection-controls">
         <label title="IP Address/Hostname of Web Radar Server (WAN IP).">Server IP/Host: </label>
         <input type="text" @bind="host" class="host-input" maxlength="128" spellcheck="false" />
@@ -26,9 +34,9 @@
         <label title="Password to authenticate with the Web Radar Server.">Password: </label>
         <input type="text" @bind="password" class="password-input" maxlength="12" spellcheck="false" />
         <button title="Connect to the remote Web Radar Server." class="rounded-button" @onclick="Connect" disabled="@isConnecting">Connect</button>
-        <label title="Your in-game name. This will make the radar focus on you.">Your Name: </label>
         @if (RadarService.playerNames != null)
         {
+            <label title="Your in-game name. This will make the radar focus on you.">Your Name: </label>
             <select class="name-input" @onchange="playerSelected">
                 <option selected value="localPlayer">select one</option>
                 @foreach (var item in RadarService.playerNames)
@@ -42,77 +50,49 @@
         <input type="range" step="0.01" min="0.50" max="2.00" @bind="RadarService.Scale" @bind:culture="CultureInfo.InvariantCulture" />
         <label title="Zoom Factor to zoom in/out on the Radar Map.">Zoom: </label>
         <input type="range" step="0.01" min="0.01" max="2.00" @bind="RadarService.Zoom" @bind:culture="CultureInfo.InvariantCulture" />
+        <span class="checkbox-group">
+            <input type="checkbox" @bind="PlayerWidget" />
+            <label title="Enable Player Widgets for additional information.">Player Widget</label>
+        </span>
+
+        <span class="checkbox-group">
+            <input type="checkbox" @bind="LootWidget" />
+            <label title="Enable Loot Widget for additional information.">Loot Widget</label>
+        </span>
+
+        <span class="checkbox-group">
+            <input type="checkbox" @bind="MiscWidget" />
+            <label title="Enable Misc Widget for additional information.">Misc Widget</label>
+        </span>
         <a class="rounded-button" href="@($"{Navigation.BaseUri}ESP?host={host}&port={port}&password={password}")" target="_blank" rel="noopener noreferrer">Open ESP</a>
-
-        <div class="widget-container @(isDragging ? "widget-dragging" : "")" style="left:@(widgetX)px; top:@(widgetY)px; position: absolute;">
-            <div class="widget-header"
-            @onmousedown="OnWidgetDragStart"
-            @onmousemove="OnWidgetDragMove"
-            @onmouseup="OnWidgetDragEnd"
-            @onmouseout="OnWidgetDragEnd">
-                <span>Loot Filter</span>
-                <button @onclick="toggleLootWidget" class="minimize-btn">@(showLootWidget ? "-" : "+")</button>
-            </div>
-            @if (showLootWidget)
-            {
-                <div id="loot-widget" class="widget-body">
-                    <label>Min Loot Price: @RadarService.lootUiConfig.MinPrice</label>
-                    <input @bind="RadarService.lootUiConfig.MinPrice" type="range" min="0" max="500000" step="1000" />
-
-                    <label>Important Loot Price: @RadarService.lootUiConfig.Important</label>
-                    <input @bind="RadarService.lootUiConfig.Important" type="range" min="0" max="500000" step="1000">
-                    <label>Search:</label>
-                    <input @bind="RadarService.lootUiConfig.SearchFilter" type="text" placeholder="Search Loot...">
-                    <div>
-                        <input type="checkbox">Show Food
-
-                        <input type="checkbox"> Show Meds
-
-                        <input type="checkbox"> Show Backpacks
-                    </div>
-                    <div>
-                        <button @onclick="@(() => {
-                            RadarService.lootUiConfig = new LootUiConfig(50000, 200000, false, false, false, null);
-                        })">Clear Search</button>
-                    </div>
-                    @if (RadarService.filteredLoot != null)
-                    {
-                        <table>
-
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Price</th>
-                                    <th>Remove</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @* //TODO: Make this a computed var that can be ran on the UI side as well instead of duplicating code *@
-                                @foreach (var item in RadarService.filteredLoot)
-                                {
-                                    <tr>
-                                        <td>@item.ShortName</td>
-                                        <td>@item.Price</td>
-                                        <td class="remove" @onclick="@(() => {RadarService.lootUiConfig.ExcludeItems.Add(item.Id);})">Remove</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    }
-                </div>
-            }
-        </div>
-
     </div>
     <div class="canvas-wrapper">
         <SkiaSharp.Views.Blazor.SKCanvasView OnPaintSurface="OnPaintSurface" class="skia-canvas" EnableRenderLoop="true" />
     </div>
 </div>
+<p>LootWidget State: @(LootWidget ? "Enabled" : "Disabled")</p>
+
+    @if (LootWidget)
+    {
+        <LootInfoWidget LootWidget="LootWidget"
+                        LootData="SignalRService.Data?.Loot" />
+
+    }
+    @if (MiscWidget)
+    {
+        <MiscInfoWidget MiscWidget="MiscWidget" />
+    }
+    @if (PlayerWidget)
+    {
+        <PlayerInfoWidget PlayerWidget="PlayerWidget"
+                          PlayerData="SignalRService.Data?.Players"
+                          CurrentPlayer="GetLocalPlayer()" />
+    }
 
 @code {
     private const string HTTPS_ERROR = "HTTPS is not supported! Change to http:// in the address bar.";
     private string windowTitle = Utils.GetRandomTitle();
-    private string host = "192.168.50.160";
+    private string host = "localhost";
     private string port = "5000";
     private string password = "password";
     private string name = "localPlayer";
@@ -120,17 +100,55 @@
     private bool isConnecting = false;
     private bool showAlert = false;
     private string alertMessage = null;
-
-    // Drag functionality variables
-    private double widgetX = 15; // Initial X position
-    private double widgetY = 62; // Initial Y position
     private bool isDragging = false;
-    private double dragOffsetX;
-    private double dragOffsetY;
-    private double lastMouseX;
-    private double lastMouseY;
+    private float lastMouseX, lastMouseY;
+    private float panOffsetX = 0f, panOffsetY = 0f;
+    public bool PlayerWidget { get; set; }
+    public bool LootWidget { get; set; }
+    public bool MiscWidget { get; set; }
 
-    private bool showLootWidget = true;
+    protected override async Task OnInitializedAsync()
+    {
+        // Load saved widget states
+        PlayerWidget = await LoadSetting("PlayerWidget", true);
+        LootWidget = await LoadSetting("LootWidget", true);
+        MiscWidget = await LoadSetting("MiscWidget", true);
+        await LootFilter.LoadSettingsAsync();
+    }
+
+    private async Task SavePlayerWidgetSetting(ChangeEventArgs e)
+    {
+        PlayerWidget = (bool)e.Value;
+        await SaveSetting("PlayerWidget", PlayerWidget);
+    }
+
+    private async Task SaveLootWidgetSetting(ChangeEventArgs e)
+    {
+        LootWidget = (bool)e.Value;
+        await SaveSetting("LootWidget", LootWidget);
+    }
+
+    private async Task SaveMiscWidgetSetting(ChangeEventArgs e)
+    {
+        MiscWidget = (bool)e.Value;
+        await SaveSetting("MiscWidget", MiscWidget);
+    }
+
+    private async Task SaveSetting(string key, object value)
+    {
+        await JS.InvokeVoidAsync("saveSetting", key, value);
+    }
+
+    private async Task<bool> LoadSetting(string key, bool defaultValue)
+    {
+        var result = await JS.InvokeAsync<bool?>("loadSetting", key);
+        return result ?? defaultValue;
+    }
+
+    private void playerSelected(ChangeEventArgs args)
+    {
+        name = args.Value.ToString();
+    }
 
     protected override void OnInitialized()
     {
@@ -141,77 +159,15 @@
 
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
 
-        if (query["host"] != null)
-        {
-            host = query["host"];
-        }
-
-        if (query["port"] != null)
-        {
-            port = query["port"];
-        }
-
-        if (query["password"] != null)
-        {
-            password = query["password"];
-        }
+        if (query["host"] != null) host = query["host"];
+        if (query["port"] != null) port = query["port"];
+        if (query["password"] != null) password = query["password"];
     }
 
-    private void playerSelected(ChangeEventArgs args)
+    private WebRadarPlayer GetLocalPlayer()
     {
-        name = args.Value.ToString();
-    }
-
-    private void toggleLootWidget()
-    {
-        showLootWidget = !showLootWidget;
-        StateHasChanged();
-    }
-
-    private void OnWidgetDragStart(MouseEventArgs e)
-    {
-        // Start dragging and capture initial position
-        isDragging = true;
-        lastMouseX = e.ClientX;
-        lastMouseY = e.ClientY;
-
-        // Calculate offset from mouse to widget top-left corner
-        dragOffsetX = e.ClientX - widgetX;
-        dragOffsetY = e.ClientY - widgetY;
-    }
-
-    private void OnWidgetDragMove(MouseEventArgs e)
-    {
-        // Only handle if we're dragging
-        if (!isDragging) return;
-
-        // Update the widget position
-        widgetX = e.ClientX - dragOffsetX;
-        widgetY = e.ClientY - dragOffsetY;
-
-        // Update last mouse position
-        lastMouseX = e.ClientX;
-        lastMouseY = e.ClientY;
-    }
-
-    private void HandleDocumentMouseMove(MouseEventArgs e)
-    {
-        // Only handle if we're dragging
-        if (!isDragging) return;
-
-        // Update the widget position
-        widgetX = e.ClientX - dragOffsetX;
-        widgetY = e.ClientY - dragOffsetY;
-
-        // Update last mouse position
-        lastMouseX = e.ClientX;
-        lastMouseY = e.ClientY;
-    }
-
-    private void OnWidgetDragEnd(MouseEventArgs e)
-    {
-        // End dragging
-        isDragging = false;
+        return SignalRService.Data?.Players?
+            .FirstOrDefault(p => p.Name?.Equals(name, StringComparison.OrdinalIgnoreCase) ?? false);
     }
 
     private async Task Connect()
@@ -252,7 +208,10 @@
 
     private void OnPaintSurface(SKPaintSurfaceEventArgs args)
     {
-        RadarService.Render(args, name);
+        var filteredLoot = SignalRService.Data?.Loot?.Where(loot => LootFilter.MatchesFilter(loot))
+                              ?? Enumerable.Empty<WebRadarLoot>();
+
+        RadarService.Render(args, name, panOffsetX, panOffsetY, filteredLoot, LootFilter);
         StateHasChanged();
     }
 
@@ -264,4 +223,39 @@
         }
         catch { }
     }
+
+    private void OnMouseWheel(WheelEventArgs e)
+    {
+        float zoomDelta = e.DeltaY > 0 ? -0.05f : 0.05f;
+        RadarService.Zoom = Math.Clamp(RadarService.Zoom + zoomDelta, 0.5f, 2.0f);
+        StateHasChanged();
+    }
+
+    private void OnMouseDown(MouseEventArgs e)
+    {
+        isDragging = true;
+        lastMouseX = (float)e.ClientX;
+        lastMouseY = (float)e.ClientY;
+    }
+
+    private void OnMouseMove(MouseEventArgs e)
+    {
+        if (!isDragging) return;
+
+        float deltaX = (float)e.ClientX - lastMouseX;
+        float deltaY = (float)e.ClientY - lastMouseY;
+
+        panOffsetX += deltaX;
+        panOffsetY += deltaY;
+
+        lastMouseX = (float)e.ClientX;
+        lastMouseY = (float)e.ClientY;
+        StateHasChanged();
+    }
+
+    private void OnMouseUp(MouseEventArgs e)
+    {
+        isDragging = false;
+    }
+
 }

@@ -1,0 +1,178 @@
+@using System.Numerics
+@using AncientMountain.Managed.Data
+@using AncientMountain.Managed.Services
+@inject NavigationManager Navigation
+@inject LootFilterService LootFilter
+@inject IJSRuntime JS
+
+@code {
+    private bool IsDraggingWidget = false; 
+    private bool Minimized = false;
+    private float WidgetX = 400;  // ✅ Default position (X)
+    private float WidgetY = 200;  // ✅ Default position (Y)
+    private float OffsetX, OffsetY;
+
+    [Parameter] public bool LootWidget { get; set; }
+    [Parameter] public IEnumerable<WebRadarLoot> LootData { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // ✅ Load saved position with defaults
+        WidgetX = await LoadSetting("LootWidgetX", WidgetX);
+        WidgetY = await LoadSetting("LootWidgetY", WidgetY);
+
+        // ✅ Load loot filters
+        await LootFilter.LoadSettingsAsync();
+    }
+
+    private IEnumerable<WebRadarLoot> FilteredLoot =>
+        LootData?.Where(loot =>
+            (LootFilter.ShowFood && loot.IsFood) ||
+            (LootFilter.ShowMeds && loot.IsMeds) ||
+            (LootFilter.ShowBackpacks && loot.IsBackpack) ||
+            (loot.Price >= LootFilter.LootPriceFilter) &&
+            !LootFilter.ExcludedItems.Contains(loot.Id) &&
+            (string.IsNullOrEmpty(LootFilter.LootSearchQuery) || 
+             loot.ShortName.Contains(LootFilter.LootSearchQuery, StringComparison.OrdinalIgnoreCase))
+        ) ?? Enumerable.Empty<WebRadarLoot>();
+
+    public bool IsOverWidget(MouseEventArgs e)
+    {
+        return e.ClientX >= WidgetX && e.ClientX <= WidgetX + 300 &&
+               e.ClientY >= WidgetY && e.ClientY <= WidgetY + (Minimized ? 30 : 250);
+    }
+
+    public void OnMouseDown(MouseEventArgs e)
+    {
+        if (IsOverWidget(e))
+        {
+            IsDraggingWidget = true;
+            OffsetX = (float)e.ClientX - WidgetX;
+            OffsetY = (float)e.ClientY - WidgetY;
+        }
+    }
+    private async Task SaveSetting(string key, object value)
+    {
+        await JS.InvokeVoidAsync("saveSetting", key, value);
+    }
+    public async Task OnMouseMove(MouseEventArgs e)
+    {
+        if (IsDraggingWidget)
+        {
+            WidgetX = (float)e.ClientX - OffsetX;
+            WidgetY = (float)e.ClientY - OffsetY;
+            await SaveSetting("LootWidgetX", WidgetX);
+            await SaveSetting("LootWidgetY", WidgetY);
+            StateHasChanged();
+        }
+    }
+
+    public void OnMouseUp(MouseEventArgs e)
+    {
+        IsDraggingWidget = false;
+    }
+
+    public string IsSelected(WebRadarLoot loot) 
+    {
+        return LootFilter.SelectedItemId == loot.Id ? "color: green;" : null;
+    }
+
+    private async Task SaveFilterSettings()
+    {
+        await LootFilter.SaveSettingsAsync();
+    }
+    private async Task<string> LoadSetting(string key, string defaultValue)
+    {
+        var result = await JS.InvokeAsync<string>("loadSetting", key);
+        return string.IsNullOrEmpty(result) ? defaultValue : result;
+    }
+
+    private async Task<float> LoadSetting(string key, float defaultValue)
+    {
+        var result = await JS.InvokeAsync<float?>("loadSetting", key);
+        return result ?? defaultValue;
+    }
+    private void ToggleMinimize() => Minimized = !Minimized;
+}
+
+@if (LootWidget)
+{
+    <div class="widget-container"
+    style="left:@(WidgetX + "px"); top:@(WidgetY + "px"); position: absolute;"
+    @onmousedown="OnMouseDown"
+    @onmousemove="OnMouseMove"
+    @onmouseup="OnMouseUp"
+    @onmouseleave="OnMouseUp">
+
+        <div class="widget-header">
+            <span>Loot Filter</span>
+            <button class="minimize-btn" @onclick="ToggleMinimize">_</button>
+        </div>
+
+        @if (!Minimized)
+        {
+            <div class="widget-body">
+                <label>Loot Price: @LootFilter.LootPriceFilter</label>
+                <input type="range" min="0" max="500000" step="1000" 
+                @bind="LootFilter.LootPriceFilter" 
+                @bind:event="oninput" 
+                @onchange="SaveFilterSettings" />
+
+                <label>Important Loot Price: @LootFilter.ImportantLootPriceFilter</label>
+                <input type="range" min="0" max="500000" step="1000" 
+                @bind="LootFilter.ImportantLootPriceFilter" 
+                @bind:event="oninput" 
+                @onchange="SaveFilterSettings" />
+
+                <label>Search:</label>
+                <input type="text" @bind="LootFilter.LootSearchQuery" 
+                @bind:event="oninput" 
+                @onchange="SaveFilterSettings" placeholder="Search Loot..." />
+                <div>
+                    <input type="checkbox" 
+                    @bind:get="LootFilter.ShowFood" 
+                    @bind:set="value => { LootFilter.ShowFood = value; SaveFilterSettings(); }" /> Show Food
+
+                    <input type="checkbox" 
+                    @bind:get="LootFilter.ShowMeds" 
+                    @bind:set="value => { LootFilter.ShowMeds = value; SaveFilterSettings(); }" /> Show Meds
+
+                    <input type="checkbox" 
+                    @bind:get="LootFilter.ShowBackpacks" 
+                    @bind:set="value => { LootFilter.ShowBackpacks = value; SaveFilterSettings(); }" /> Show Backpacks
+                </div>
+                <button @onclick="@(() => LootFilter.ResetFilters())">Clear Filters</button>
+                <table style="cursor: default">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Price</th>
+                            <th>Hide (Items Hidden: @LootFilter.ExcludedItems.Count)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var loot in FilteredLoot)
+                        {
+
+                            <tr style="@IsSelected(loot)">
+                                <td style="cursor: help" onclick="@(() =>
+                                    { 
+                                        if (LootFilter.SelectedItemId != loot.Id)
+                                        {
+                                            LootFilter.SelectedItemId = loot.Id;
+                                        } else 
+                                        {
+                                            LootFilter.SelectedItemId = null;
+                                        }
+                                    }
+                                )">@(loot.ShortName.StartsWith("NULL") ? "Backpack" : loot.ShortName)</td>
+                                <td>@loot.Price</td>
+                                <td style="color: red; cursor: pointer" @onclick="@(() => {LootFilter.ExcludedItems.Add(loot.Id);})">Remove</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}

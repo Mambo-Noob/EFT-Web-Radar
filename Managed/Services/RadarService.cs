@@ -10,20 +10,10 @@ using System.Numerics;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace AncientMountain.Managed.Services
 {
-    public class LootUiConfig(int minPrice, int important, bool backpack, bool meds, bool food, string searchFilter)
-    {
-        public int MinPrice { get; set; } = minPrice;
-        public int Important { get; set; } = important;
-        public bool Backpack { get; set; } = backpack;
-        public bool Meds { get; set; } = meds;
-        public bool Food { get; set; } = food;
-        public string SearchFilter { get; set; } = searchFilter;
-        public HashSet<string> ExcludeItems { get; set; } = new HashSet<string>();
-    }
-
     public class ESPUiConfig()
     {
         public int ScreenWidth { get; set; } = 2560;
@@ -52,8 +42,6 @@ namespace AncientMountain.Managed.Services
             { "Sandbox_high", "Ground Zero" }
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-        //Should save all of this to local storage so it lasts a refresh and on esp link
-        public static LootUiConfig lootUiConfig { get; set; } = new LootUiConfig(50000, 200000, false, false, false, null);
         public static ESPUiConfig espUiConfig { get; set; } = new ESPUiConfig();
         public static IEnumerable<WebRadarLoot> filteredLoot { get; set; }
         public static IEnumerable<string> playerNames { get; set; }
@@ -75,7 +63,12 @@ namespace AncientMountain.Managed.Services
         /// Radar UI Zoom Value.
         /// *Be Sure to Invert this value before usage*
         /// </summary>
-        public static float Zoom { get; set; } = 1f;
+        private static float _zoom = 1f; // Default zoom level
+        public static float Zoom
+        {
+            get => _zoom;
+            set => _zoom = Math.Clamp(value, 0.5f, 3.5f); // Prevent extreme zoom
+        }
 
         private readonly SignalRService _sr;
         private readonly FrozenDictionary<string, Map> _maps;
@@ -85,8 +78,9 @@ namespace AncientMountain.Managed.Services
             _sr = sr;
             LoadMaps(ref _maps);
         }
+        private SKPoint _mousePosition = new SKPoint(0, 0);
 
-        public void Render(SKPaintSurfaceEventArgs args, string localPlayerName)
+        public void Render(SKPaintSurfaceEventArgs args, string localPlayerName, float panX, float panY, IEnumerable<WebRadarLoot> filteredLoot, LootFilterService lootFilter)
         {
             var info = args.Info;
             var canvas = args.Surface.Canvas;
@@ -105,7 +99,7 @@ namespace AncientMountain.Managed.Services
                         {
                             var corner = new SKPoint(info.Rect.Left, info.Rect.Top);
                             corner.Offset(0, 12 * RadarService.Scale);
-                            canvas.DrawText($"{(DateTime.UtcNow - data?.SendTime)?.TotalMilliseconds:0.0}ms", corner, SKPaints.PaintCorpse);
+                            canvas.DrawText($"{(DateTime.UtcNow - data?.SendTime)?.TotalMilliseconds:0.0}ms", corner, SKPaints.TextLoot);
                         }
 
                         if (data is not null &&
@@ -131,25 +125,25 @@ namespace AncientMountain.Managed.Services
                             // Draw Game Map
                             canvas.DrawImage(map.Image, mapParams.Bounds, mapCanvasBounds, SKPaints.PaintBitmap);
                             // Draw LocalPlayer
-                            localPlayer.Draw(canvas, info, mapParams, localPlayer);
+                            localPlayer.Draw(canvas, info, mapParams, localPlayer, _mousePosition);
+
                             // Draw other players
-                            var allPlayers = data.Players
-                                .Where(x => !x.HasExfild); // Skip exfil'd players
-                            playerNames = allPlayers.Where(x => x.Type == WebPlayerType.LocalPlayer || x.Type == WebPlayerType.Player || x.Type == WebPlayerType.Teammate).Select(x => x.Name);
-                                                           
+                            var allPlayers = data.Players.Where(x => !x.HasExfild && x != localPlayer);
                             foreach (var player in allPlayers)
                             {
-                                if (player == localPlayer)
-                                    continue; // Already drawn local player, move on
-                                player.Draw(canvas, info, mapParams, localPlayer);
+                                player.Draw(canvas, info, mapParams, localPlayer, _mousePosition);
                             }
 
-                            filteredLoot = data.Loot.Where(
-                                x => (string.IsNullOrEmpty(lootUiConfig.SearchFilter) || x.ShortName.Contains(lootUiConfig.SearchFilter, StringComparison.CurrentCultureIgnoreCase))
-                                && x.Price > lootUiConfig.MinPrice && !lootUiConfig.ExcludeItems.Contains(x.Id)).OrderByDescending(x => x.Price);
-                            foreach (var item in filteredLoot)
+                            playerNames = data.Players.Where(x => x.Type == WebPlayerType.LocalPlayer || x.Type == WebPlayerType.Player || x.Type == WebPlayerType.Teammate).Select(x => x.Name);
+
+                            if (filteredLoot is not null)
                             {
-                                item.Draw(canvas, info, mapParams, localPlayer, lootUiConfig);
+                                foreach (var lootItem in filteredLoot)
+                                {
+                                    if (lootItem.ShortName.StartsWith("Q_"))
+                                        continue;
+                                    lootItem.Draw(canvas, info, mapParams, localPlayer, lootFilter);
+                                }
                             }
                         }
                         else
@@ -170,7 +164,7 @@ namespace AncientMountain.Managed.Services
             canvas.Flush();
         }
 
-        public void RenderESP(SKPaintSurfaceEventArgs args, string localPlayerName)
+        public void RenderESP(SKPaintSurfaceEventArgs args, string localPlayerName, IEnumerable<WebRadarLoot> filteredLoot)
         {
             var info = args.Info;
             var canvas = args.Surface.Canvas;
@@ -196,22 +190,26 @@ namespace AncientMountain.Managed.Services
                             if (localPlayer is null)
                                 break;
 
-                            filteredLoot = data.Loot.Where(
-                                x => (string.IsNullOrEmpty(lootUiConfig.SearchFilter) || x.ShortName.Contains(lootUiConfig.SearchFilter, StringComparison.CurrentCultureIgnoreCase))
-                                && x.Price > lootUiConfig.MinPrice && !lootUiConfig.ExcludeItems.Contains(x.Id)).OrderByDescending(x => x.Price);
+                            if (filteredLoot is not null)
+                            {
+                                foreach (var lootItem in filteredLoot)
+                                {
+                                    if (lootItem.ShortName.StartsWith("Q_"))
+                                        continue;
+                                    lootItem.DrawESP(canvas, localPlayer, espUiConfig);
+                                }
+                            }
 
                             var allPlayers = data.Players.Where(x => !x.HasExfild);
                             playerNames = allPlayers.Where(x => x.Type == WebPlayerType.LocalPlayer || x.Type == WebPlayerType.Player || x.Type == WebPlayerType.Teammate).Select(x => x.Name);
 
                             //Players and items show at weird height (if on the ground or laying down, shows weird)
-                            //Scaling is a bit off on the screen. Straight head is good but corner of screens are off
                             DrawLoot(canvas, localPlayer, filteredLoot);
-                            foreach(var p in allPlayers)
+                            foreach (var p in allPlayers)
                             {
                                 p.DrawESP(canvas, localPlayer, espUiConfig);
                             }
-                        }
-                        else
+                        } else
                         {
                             WaitingForRaidStatus(canvas, info);
                         }
@@ -236,9 +234,28 @@ namespace AncientMountain.Managed.Services
                 foreach (var item in loot)
                 {
                     //Add UILootConfig
-                    item.DrawESP(canvas, localPlayer, lootUiConfig, espUiConfig);
+                    item.DrawESP(canvas, localPlayer, espUiConfig);
                 }
             }
+        }
+
+        /// <summary>
+        /// Retrieves the currently active map from SignalR data.
+        /// </summary>
+        public Map GetCurrentMap()
+        {
+            if (_sr.Data != null && _sr.Data.InGame && _sr.Data.MapID is string mapID)
+            {
+                if (_maps.TryGetValue(mapID, out var map))
+                {
+                    return map;
+                }
+            }
+            return null; // No valid map found
+        }
+        public void UpdateMousePosition(SKPoint position)
+        {
+            _mousePosition = position;
         }
 
         private readonly Stopwatch _statusSw = Stopwatch.StartNew();

@@ -18,11 +18,6 @@ html, body {
     font-size: 16px;
 }
 
-.input-group {
-    display: inline-block;
-    margin-right: 10px;
-}
-
 .host-input {
     width: 200px; /* Width for host input */
 }
@@ -287,15 +282,3 @@ th, td {
         color: #666666; /* Change text color to a darker gray */
         cursor: progress; /* Change cursor to progress */
     }
-/* Style for when the widget is being dragged */
-.widget-dragging {
-    opacity: 0.8;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-}
-
-.remove {
-    color: red
-}
-.remove:hover {
-    cursor: pointer
-}
