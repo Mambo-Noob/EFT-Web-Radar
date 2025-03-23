@@ -85,8 +85,6 @@ namespace AncientMountain.Managed.Data
         {
             var heightDiff = Position.Y - localPlayer.Position.Y;
             var size = 4 * RadarService.Scale;
-            //This might need to call CanvasDraw as well
-            canvas.DrawCircle(point, size, SKPaints.ShapeOutline);
 
             if (!lootFilter.ShowBackpacks && IsBackpack) return;
 

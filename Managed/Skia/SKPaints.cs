@@ -168,7 +168,7 @@ namespace AncientMountain.Managed.Skia
         };
         public static SKPaint PaintLoot { get; } = new()
         {
-            Color = SKColors.Cyan, // Loot marker color
+            Color = SKColors.WhiteSmoke, // Loot marker color
             StrokeWidth = 3,
             Style = SKPaintStyle.Fill,
             IsAntialias = true,
@@ -184,7 +184,7 @@ namespace AncientMountain.Managed.Skia
         };
         public static SKPaint PaintLootImportant { get; } = new()
         {
-            Color = SKColors.Red, // Loot marker color
+            Color = SKColors.Cyan, // Loot marker color
             StrokeWidth = 3,
             Style = SKPaintStyle.Fill,
             IsAntialias = true,
@@ -194,7 +194,7 @@ namespace AncientMountain.Managed.Skia
         public static SKPaint TextImportantLoot { get; } = new()
         {
             SubpixelText = true,
-            Color = SKColors.Red,
+            Color = SKColors.Cyan,
             IsStroke = false,
             TextSize = 12,
             TextEncoding = SKTextEncoding.Utf8,
