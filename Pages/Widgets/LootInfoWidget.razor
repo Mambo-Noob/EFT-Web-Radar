@@ -31,6 +31,7 @@
             (LootFilter.ShowMeds && loot.IsMeds) ||
             (LootFilter.ShowBackpacks && loot.IsBackpack) ||
             (loot.Price >= LootFilter.LootPriceFilter) &&
+            !LootFilter.ExcludedItems.Contains(loot.Id) &&
             (string.IsNullOrEmpty(LootFilter.LootSearchQuery) || 
              loot.ShortName.Contains(LootFilter.LootSearchQuery, StringComparison.OrdinalIgnoreCase))
         ) ?? Enumerable.Empty<WebRadarLoot>();
