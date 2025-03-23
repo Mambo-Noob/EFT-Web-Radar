@@ -204,7 +204,6 @@ namespace AncientMountain.Managed.Services
                             playerNames = allPlayers.Where(x => x.Type == WebPlayerType.LocalPlayer || x.Type == WebPlayerType.Player || x.Type == WebPlayerType.Teammate).Select(x => x.Name);
 
                             //Players and items show at weird height (if on the ground or laying down, shows weird)
-                            //Scaling is a bit off on the screen. Straight head is good but corner of screens are off
                             DrawLoot(canvas, localPlayer, filteredLoot);
                             foreach (var p in allPlayers)
                             {
