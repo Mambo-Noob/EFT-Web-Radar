@@ -88,29 +88,29 @@ namespace AncientMountain.Managed.Services
             var canvas = args.Surface.Canvas;
             canvas.Clear(SKColors.Black);
 
-            if (localPlayerPosGot)
-            {
-                float centerX = info.Width / 2f;
-                float centerY = info.Height / 2f;
+            //if (localPlayerPosGot)
+            //{
+            //    float centerX = info.Width / 2f;
+            //    float centerY = info.Height / 2f;
 
-                float adjustedX = centerX - (localPlayerMapPos.X * Zoom) + panX;
-                float adjustedY = centerY - (localPlayerMapPos.Y * Zoom) + panY;
+            //    float adjustedX = centerX - (localPlayerMapPos.X * Zoom) + panX;
+            //    float adjustedY = centerY - (localPlayerMapPos.Y * Zoom) + panY;
 
-                canvas.Translate(adjustedX, adjustedY);
-            }
+            //    canvas.Translate(adjustedX, adjustedY);
+            //}
 
-            var input = SignalRService.GetMouseInput();
-            if (input.ScrollDelta != 0 && localPlayerPosGot)
-            {
-                // Save old zoom level before change
-                float oldZoom = Zoom;
-                Zoom = Math.Clamp(Zoom + input.ScrollDelta * 0.2f, 0.5f, 3.5f);
+            //var input = SignalRService.GetMouseInput();
+            //if (input.ScrollDelta != 0 && localPlayerPosGot)
+            //{
+            //    // Save old zoom level before change
+            //    float oldZoom = Zoom;
+            //    Zoom = Math.Clamp(Zoom + input.ScrollDelta * 0.2f, 0.5f, 3.5f);
 
-                // Calculate new pan offsets to center player when zooming
-                float zoomFactor = Zoom / oldZoom;
-                panX = (panX - localPlayerMapPos.X) * zoomFactor + localPlayerMapPos.X;
-                panY = (panY - localPlayerMapPos.Y) * zoomFactor + localPlayerMapPos.Y;
-            }
+            //    // Calculate new pan offsets to center player when zooming
+            //    float zoomFactor = Zoom / oldZoom;
+            //    panX = (panX - localPlayerMapPos.X) * zoomFactor + localPlayerMapPos.X;
+            //    panY = (panY - localPlayerMapPos.Y) * zoomFactor + localPlayerMapPos.Y;
+            //}
 
             try
             {
