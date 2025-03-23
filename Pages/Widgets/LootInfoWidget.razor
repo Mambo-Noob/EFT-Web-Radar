@@ -71,6 +71,11 @@
         IsDraggingWidget = false;
     }
 
+    public string IsSelected(WebRadarLoot loot) 
+    {
+        return LootFilter.SelectedItemId == loot.Id ? "color: green;" : null;
+    }
+
     private async Task SaveFilterSettings()
     {
         await LootFilter.SaveSettingsAsync();
@@ -148,7 +153,7 @@
                         @foreach (var loot in FilteredLoot)
                         {
 
-                            <tr style="@(() => {return LootFilter.SelectedItemId == loot.Id ? "color: green;" : "";})">
+                            <tr style="@IsSelected(loot)">
                                 <td style="cursor: help" onclick="@(() =>
                                     { 
                                         if (LootFilter.SelectedItemId != loot.Id)
