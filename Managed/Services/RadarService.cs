@@ -101,14 +101,17 @@ namespace AncientMountain.Managed.Services
                         break;
                     case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connected:
                         var data = _sr.Data;
-                        if (data is not null &&
-                            data.InGame &&
-                            data.MapID is string mapID)
+                        if (false) //Leaving for debug purposes
                         {
                             var corner = new SKPoint(info.Rect.Left, info.Rect.Top);
                             corner.Offset(0, 12 * RadarService.Scale);
-                            canvas.DrawText($"{(data.SendTime - DateTime.UtcNow).TotalMilliseconds:0.0}ms", corner, SKPaints.PaintCorpse);
-                            
+                            canvas.DrawText($"{(DateTime.UtcNow - data?.SendTime)?.TotalMilliseconds:0.0}ms", corner, SKPaints.PaintCorpse);
+                        }
+
+                        if (data is not null &&
+                            data.InGame &&
+                            data.MapID is string mapID)
+                        {                            
                             if (!_maps.TryGetValue(mapID, out var map))
                                 map = _maps["default"];
                             var localPlayer = data.Players.FirstOrDefault(x => x.Name?.Equals(localPlayerName, StringComparison.OrdinalIgnoreCase) ?? false);
