@@ -206,7 +206,7 @@ namespace AncientMountain.Managed.Skia
         public static SKPaint TextLoot { get; } = new()
         {
             SubpixelText = true,
-            Color = SKColors.Cyan, // Loot text color
+            Color = SKColors.WhiteSmoke, // Loot text color
             IsStroke = false,
             TextSize = 12,
             TextEncoding = SKTextEncoding.Utf8,

@@ -25,14 +25,4 @@
     <script src="_framework/blazor.webassembly.js"></script>
     <script src="functions.js"></script>
 </body>
-<script>
-    window.saveSetting = (key, value) => {
-        localStorage.setItem(key, JSON.stringify(value));
-    };
-
-    window.loadSetting = (key) => {
-        return JSON.parse(localStorage.getItem(key));
-    };
-</script>
-
 </html>

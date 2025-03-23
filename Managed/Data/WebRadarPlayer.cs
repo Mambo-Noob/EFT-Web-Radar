@@ -241,7 +241,7 @@ namespace AncientMountain.Managed.Data
             float size = 6 * RadarService.Scale;
 
             canvas.DrawCircle(point, size, SKPaints.ShapeOutline); // Draw outline
-            canvas.CanvasDrawIndicator(markerPaint, heightDiff, point, size);
+            canvas.DrawCircle(point, size, markerPaint);
 
             var radians = MapRotation.ToRadians();
             int aimlineLength = 15;

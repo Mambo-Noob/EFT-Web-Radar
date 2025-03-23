@@ -1,6 +1,8 @@
 ﻿@page "/esp"
+@using AncientMountain.Managed.Data
 @using AncientMountain.Managed.Services
 @using SkiaSharp.Views.Blazor
+@inject LootFilterService LootFilter
 @inject IJSRuntime js
 @inject SignalRService SignalRService
 @inject RadarService RadarService
@@ -70,7 +72,10 @@
 
     private void OnPaintSurface(SKPaintSurfaceEventArgs args)
     {
-        // RadarService.RenderESP(args, name);
+        var filteredLoot = SignalRService.Data?.Loot?.Where(loot => LootFilter.MatchesFilter(loot))
+                      ?? Enumerable.Empty<WebRadarLoot>();
+
+        RadarService.RenderESP(args, name, filteredLoot);
         StateHasChanged();
     }
 

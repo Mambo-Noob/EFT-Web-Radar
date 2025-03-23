@@ -21,7 +21,11 @@
         @alertMessage
     </div>
 }
-<div class="canvas-container">
+<div class="canvas-container"
+     @onwheel="OnMouseWheel"
+     @onmousedown="OnMouseDown"
+     @onmousemove="OnMouseMove"
+     @onmouseup="OnMouseUp">
     <div class="connection-controls">
         <label title="IP Address/Hostname of Web Radar Server (WAN IP).">Server IP/Host: </label>
         <input type="text" @bind="host" class="host-input" maxlength="128" spellcheck="false" />
@@ -208,6 +212,7 @@
                               ?? Enumerable.Empty<WebRadarLoot>();
 
         RadarService.Render(args, name, panOffsetX, panOffsetY, filteredLoot, LootFilter);
+        StateHasChanged();
     }
 
     public async ValueTask DisposeAsync()

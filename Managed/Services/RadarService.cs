@@ -47,8 +47,6 @@ namespace AncientMountain.Managed.Services
         public static IEnumerable<string> playerNames { get; set; }
 
         private static float _scale = 1f;
-        private static Vector3 localPlayerMapPos;
-        private static bool localPlayerPosGot = false;
         /// <summary>
         /// Radar UI Scale Value.
         /// </summary>
@@ -88,30 +86,6 @@ namespace AncientMountain.Managed.Services
             var canvas = args.Surface.Canvas;
             canvas.Clear(SKColors.Black);
 
-            //if (localPlayerPosGot)
-            //{
-            //    float centerX = info.Width / 2f;
-            //    float centerY = info.Height / 2f;
-
-            //    float adjustedX = centerX - (localPlayerMapPos.X * Zoom) + panX;
-            //    float adjustedY = centerY - (localPlayerMapPos.Y * Zoom) + panY;
-
-            //    canvas.Translate(adjustedX, adjustedY);
-            //}
-
-            //var input = SignalRService.GetMouseInput();
-            //if (input.ScrollDelta != 0 && localPlayerPosGot)
-            //{
-            //    // Save old zoom level before change
-            //    float oldZoom = Zoom;
-            //    Zoom = Math.Clamp(Zoom + input.ScrollDelta * 0.2f, 0.5f, 3.5f);
-
-            //    // Calculate new pan offsets to center player when zooming
-            //    float zoomFactor = Zoom / oldZoom;
-            //    panX = (panX - localPlayerMapPos.X) * zoomFactor + localPlayerMapPos.X;
-            //    panY = (panY - localPlayerMapPos.Y) * zoomFactor + localPlayerMapPos.Y;
-            //}
-
             try
             {
                 switch (_sr.ConnectionState)
@@ -140,7 +114,6 @@ namespace AncientMountain.Managed.Services
                                 break;
                             var localPlayerPos = localPlayer.Position;
                             var localPlayerMapPos = localPlayerPos.ToMapPos(map);
-                            localPlayerPosGot = true;
                             var mapParams = GetMapParameters(info, map, localPlayerMapPos); // Map auto follow LocalPlayer
                             var mapCanvasBounds = new SKRect() // Drawing Destination
                             {
@@ -161,7 +134,7 @@ namespace AncientMountain.Managed.Services
                                 player.Draw(canvas, info, mapParams, localPlayer, _mousePosition);
                             }
 
-                            playerNames = allPlayers.Where(x => x.Type == WebPlayerType.LocalPlayer || x.Type == WebPlayerType.Player || x.Type == WebPlayerType.Teammate).Select(x => x.Name);
+                            playerNames = data.Players.Where(x => x.Type == WebPlayerType.LocalPlayer || x.Type == WebPlayerType.Player || x.Type == WebPlayerType.Teammate).Select(x => x.Name);
 
                             if (filteredLoot is not null)
                             {
@@ -191,65 +164,68 @@ namespace AncientMountain.Managed.Services
             canvas.Flush();
         }
 
-        public void RenderESP(SKPaintSurfaceEventArgs args, string localPlayerName, float panX, float panY, IEnumerable<WebRadarLoot> filteredLoot, LootFilterService lootFilter)
+        public void RenderESP(SKPaintSurfaceEventArgs args, string localPlayerName, IEnumerable<WebRadarLoot> filteredLoot)
         {
             var info = args.Info;
             var canvas = args.Surface.Canvas;
             canvas.Clear(SKColors.Black);
 
-            return;
+            try
+            {
+                switch (_sr.ConnectionState)
+                {
+                    case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Disconnected:
+                        NotConnectedStatus(canvas, info, "ESP");
+                        break;
+                    case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connected:
+                        var data = _sr.Data;
+                        if (data is not null &&
+                            data.InGame &&
+                            data.MapID is string mapID)
+                        {
+                            if (!_maps.TryGetValue(mapID, out var map))
+                                map = _maps["default"];
+                            var localPlayer = data.Players.FirstOrDefault(x => x.Name?.Equals(localPlayerName, StringComparison.OrdinalIgnoreCase) ?? false);
+                            localPlayer ??= data.Players.FirstOrDefault();
+                            if (localPlayer is null)
+                                break;
 
-            //try
-            //{
-            //    switch (_sr.ConnectionState)
-            //    {
-            //        case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Disconnected:
-            //            NotConnectedStatus(canvas, info, "ESP");
-            //            break;
-            //        case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connected:
-            //            var data = _sr.Data;
-            //            if (data is not null &&
-            //                data.InGame &&
-            //                data.MapID is string mapID)
-            //            {
-            //                if (!_maps.TryGetValue(mapID, out var map))
-            //                    map = _maps["default"];
-            //                var localPlayer = data.Players.FirstOrDefault(x => x.Name?.Equals(localPlayerName, StringComparison.OrdinalIgnoreCase) ?? false);
-            //                localPlayer ??= data.Players.FirstOrDefault();
-            //                if (localPlayer is null)
-            //                    break;
+                            if (filteredLoot is not null)
+                            {
+                                foreach (var lootItem in filteredLoot)
+                                {
+                                    if (lootItem.ShortName.StartsWith("Q_"))
+                                        continue;
+                                    lootItem.DrawESP(canvas, localPlayer, espUiConfig);
+                                }
+                            }
 
-            //                filteredLoot = data.Loot.Where(
-            //                    x => (string.IsNullOrEmpty(lootUiConfig.SearchFilter) || x.ShortName.Contains(lootUiConfig.SearchFilter, StringComparison.CurrentCultureIgnoreCase))
-            //                    && x.Price > lootUiConfig.MinPrice && !lootUiConfig.ExcludeItems.Contains(x.Id)).OrderByDescending(x => x.Price);
+                            var allPlayers = data.Players.Where(x => !x.HasExfild);
+                            playerNames = allPlayers.Where(x => x.Type == WebPlayerType.LocalPlayer || x.Type == WebPlayerType.Player || x.Type == WebPlayerType.Teammate).Select(x => x.Name);
 
-            //                var allPlayers = data.Players.Where(x => !x.HasExfild);
-            //                playerNames = allPlayers.Where(x => x.Type == WebPlayerType.LocalPlayer || x.Type == WebPlayerType.Player || x.Type == WebPlayerType.Teammate).Select(x => x.Name);
+                            //Players and items show at weird height (if on the ground or laying down, shows weird)
+                            //Scaling is a bit off on the screen. Straight head is good but corner of screens are off
+                            DrawLoot(canvas, localPlayer, filteredLoot);
+                            foreach (var p in allPlayers)
+                            {
+                                p.DrawESP(canvas, localPlayer, espUiConfig);
+                            }
+                        } else
+                        {
+                            WaitingForRaidStatus(canvas, info);
+                        }
+                        break;
+                    case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connecting:
+                        ConnectingStatus(canvas, info);
+                        break;
+                    case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Reconnecting:
+                        ReConnectingStatus(canvas, info);
+                        break;
+                }
+            }
+            catch { }
 
-            //                //Players and items show at weird height (if on the ground or laying down, shows weird)
-            //                //Scaling is a bit off on the screen. Straight head is good but corner of screens are off
-            //                DrawLoot(canvas, localPlayer, filteredLoot);
-            //                foreach(var p in allPlayers)
-            //                {
-            //                    p.DrawESP(canvas, localPlayer, espUiConfig);
-            //                }
-            //            }
-            //            else
-            //            {
-            //                WaitingForRaidStatus(canvas, info);
-            //            }
-            //            break;
-            //        case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connecting:
-            //            ConnectingStatus(canvas, info);
-            //            break;
-            //        case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Reconnecting:
-            //            ReConnectingStatus(canvas, info);
-            //            break;
-            //    }
-            //}
-            //catch { }
-
-            //canvas.Flush();
+            canvas.Flush();
         }
 
         private static void DrawLoot(SKCanvas canvas, WebRadarPlayer localPlayer, IEnumerable<WebRadarLoot> loot)
