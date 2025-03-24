@@ -31,6 +31,7 @@
             (LootFilter.ShowMeds && loot.IsMeds) ||
             (LootFilter.ShowBackpacks && loot.IsBackpack) ||
             (loot.Price >= LootFilter.LootPriceFilter) &&
+            !LootFilter.ExcludedItems.Contains(loot.Id) &&
             (string.IsNullOrEmpty(LootFilter.LootSearchQuery) || 
              loot.ShortName.Contains(LootFilter.LootSearchQuery, StringComparison.OrdinalIgnoreCase))
         ) ?? Enumerable.Empty<WebRadarLoot>();
@@ -71,6 +72,11 @@
         IsDraggingWidget = false;
     }
 
+    public string IsSelected(WebRadarLoot loot) 
+    {
+        return LootFilter.SelectedItemId == loot.Id ? "color: green;" : null;
+    }
+
     private async Task SaveFilterSettings()
     {
         await LootFilter.SaveSettingsAsync();
@@ -92,11 +98,11 @@
 @if (LootWidget)
 {
     <div class="widget-container"
-         style="left:@(WidgetX + "px"); top:@(WidgetY + "px"); position: absolute;"
-         @onmousedown="OnMouseDown"
-         @onmousemove="OnMouseMove"
-         @onmouseup="OnMouseUp"
-         @onmouseleave="OnMouseUp">
+    style="left:@(WidgetX + "px"); top:@(WidgetY + "px"); position: absolute;"
+    @onmousedown="OnMouseDown"
+    @onmousemove="OnMouseMove"
+    @onmouseup="OnMouseUp"
+    @onmouseleave="OnMouseUp">
 
         <div class="widget-header">
             <span>Loot Filter</span>
@@ -108,46 +114,60 @@
             <div class="widget-body">
                 <label>Loot Price: @LootFilter.LootPriceFilter</label>
                 <input type="range" min="0" max="500000" step="1000" 
-                       @bind="LootFilter.LootPriceFilter" 
-                       @bind:event="oninput" 
-                       @onchange="SaveFilterSettings" />
+                @bind="LootFilter.LootPriceFilter" 
+                @bind:event="oninput" 
+                @onchange="SaveFilterSettings" />
 
                 <label>Important Loot Price: @LootFilter.ImportantLootPriceFilter</label>
                 <input type="range" min="0" max="500000" step="1000" 
-                       @bind="LootFilter.ImportantLootPriceFilter" 
-                       @bind:event="oninput" 
-                       @onchange="SaveFilterSettings" />
+                @bind="LootFilter.ImportantLootPriceFilter" 
+                @bind:event="oninput" 
+                @onchange="SaveFilterSettings" />
 
                 <label>Search:</label>
                 <input type="text" @bind="LootFilter.LootSearchQuery" 
-                       @bind:event="oninput" 
-                       @onchange="SaveFilterSettings" placeholder="Search Loot..." />
-                    <div>
-                        <input type="checkbox" 
-                               @bind:get="LootFilter.ShowFood" 
-                               @bind:set="value => { LootFilter.ShowFood = value; SaveFilterSettings(); }" /> Show Food
+                @bind:event="oninput" 
+                @onchange="SaveFilterSettings" placeholder="Search Loot..." />
+                <div>
+                    <input type="checkbox" 
+                    @bind:get="LootFilter.ShowFood" 
+                    @bind:set="value => { LootFilter.ShowFood = value; SaveFilterSettings(); }" /> Show Food
 
-                        <input type="checkbox" 
-                               @bind:get="LootFilter.ShowMeds" 
-                               @bind:set="value => { LootFilter.ShowMeds = value; SaveFilterSettings(); }" /> Show Meds
+                    <input type="checkbox" 
+                    @bind:get="LootFilter.ShowMeds" 
+                    @bind:set="value => { LootFilter.ShowMeds = value; SaveFilterSettings(); }" /> Show Meds
 
-                        <input type="checkbox" 
-                               @bind:get="LootFilter.ShowBackpacks" 
-                               @bind:set="value => { LootFilter.ShowBackpacks = value; SaveFilterSettings(); }" /> Show Backpacks
-                    </div>
-                <table>
+                    <input type="checkbox" 
+                    @bind:get="LootFilter.ShowBackpacks" 
+                    @bind:set="value => { LootFilter.ShowBackpacks = value; SaveFilterSettings(); }" /> Show Backpacks
+                </div>
+                <button @onclick="@(() => LootFilter.ResetFilters())">Clear Filters</button>
+                <table style="cursor: default">
                     <thead>
                         <tr>
                             <th>Name</th>
                             <th>Price</th>
+                            <th>Hide (Items Hidden: @LootFilter.ExcludedItems.Count)</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var loot in FilteredLoot)
                         {
-                            <tr>
-                                <td>@(loot.ShortName.StartsWith("NULL") ? "Backpack" : loot.ShortName)</td>
+
+                            <tr style="@IsSelected(loot)">
+                                <td style="cursor: help" onclick="@(() =>
+                                    { 
+                                        if (LootFilter.SelectedItemId != loot.Id)
+                                        {
+                                            LootFilter.SelectedItemId = loot.Id;
+                                        } else 
+                                        {
+                                            LootFilter.SelectedItemId = null;
+                                        }
+                                    }
+                                )">@(loot.ShortName.StartsWith("NULL") ? "Backpack" : loot.ShortName)</td>
                                 <td>@loot.Price</td>
+                                <td style="color: red; cursor: pointer" @onclick="@(() => {LootFilter.ExcludedItems.Add(loot.Id);})">Remove</td>
                             </tr>
                         }
                     </tbody>

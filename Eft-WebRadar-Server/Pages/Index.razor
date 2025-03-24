@@ -6,6 +6,7 @@
 @using AncientMountain.Managed
 @using AncientMountain.Managed.Services
 @using System.Globalization
+@using System.Text.Json;
 @inject SignalRService SignalRService
 @inject RadarService RadarService
 @inject NavigationManager Navigation
@@ -13,7 +14,6 @@
 @inject IJSRuntime JS
 
 <PageTitle>@windowTitle</PageTitle>
-
 @if (showAlert)
 {
     <div class="alert">
@@ -21,13 +21,11 @@
         @alertMessage
     </div>
 }
-
 <div class="canvas-container"
      @onwheel="OnMouseWheel"
      @onmousedown="OnMouseDown"
      @onmousemove="OnMouseMove"
      @onmouseup="OnMouseUp">
-
     <div class="connection-controls">
         <label title="IP Address/Hostname of Web Radar Server (WAN IP).">Server IP/Host: </label>
         <input type="text" @bind="host" class="host-input" maxlength="128" spellcheck="false" />
@@ -36,8 +34,18 @@
         <label title="Password to authenticate with the Web Radar Server.">Password: </label>
         <input type="text" @bind="password" class="password-input" maxlength="12" spellcheck="false" />
         <button title="Connect to the remote Web Radar Server." class="rounded-button" @onclick="Connect" disabled="@isConnecting">Connect</button>
-        <label title="Your in-game name. This will make the radar focus on you.">Your Name: </label>
-        <input type="text" @bind="name" class="name-input" maxlength="25" spellcheck="false" />
+        @if (RadarService.playerNames != null)
+        {
+            <label title="Your in-game name. This will make the radar focus on you.">Your Name: </label>
+            <select class="name-input" @onchange="playerSelected">
+                <option selected value="localPlayer">select one</option>
+                @foreach (var item in RadarService.playerNames)
+                {
+                    <option value="@item">@item</option>
+                }
+            </select>
+        }
+
         <label title="Scale Factor to make elements smaller/larger on the Radar Map.">Scale: </label>
         <input type="range" step="0.01" min="0.50" max="2.00" @bind="RadarService.Scale" @bind:culture="CultureInfo.InvariantCulture" />
         <label title="Zoom Factor to zoom in/out on the Radar Map.">Zoom: </label>
@@ -56,8 +64,8 @@
             <input type="checkbox" @bind="MiscWidget" />
             <label title="Enable Misc Widget for additional information.">Misc Widget</label>
         </span>
+        <a class="rounded-button" href="@($"{Navigation.BaseUri}ESP?host={host}&port={port}&password={password}")" target="_blank" rel="noopener noreferrer">Open ESP</a>
     </div>
-
     <div class="canvas-wrapper">
         <SkiaSharp.Views.Blazor.SKCanvasView OnPaintSurface="OnPaintSurface" class="skia-canvas" EnableRenderLoop="true" />
     </div>
@@ -68,7 +76,6 @@
     {
         <LootInfoWidget LootWidget="LootWidget"
                         LootData="SignalRService.Data?.Loot" />
-        //Console.WriteLine($"[SignalRService] Loot count: {LootData?.Loot?.Count() ?? 0}");
 
     }
     @if (MiscWidget)
@@ -106,7 +113,7 @@
         PlayerWidget = await LoadSetting("PlayerWidget", true);
         LootWidget = await LoadSetting("LootWidget", true);
         MiscWidget = await LoadSetting("MiscWidget", true);
-        await LootFilter.LoadSettingsAsync(); 
+        await LootFilter.LoadSettingsAsync();
     }
 
     private async Task SavePlayerWidgetSetting(ChangeEventArgs e)
@@ -138,6 +145,11 @@
         return result ?? defaultValue;
     }
 
+    private void playerSelected(ChangeEventArgs args)
+    {
+        name = args.Value.ToString();
+    }
+
     protected override void OnInitialized()
     {
         var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
@@ -164,7 +176,8 @@
         StateHasChanged();
         try
         {
-            if (isHttps) throw new Exception(HTTPS_ERROR);
+            if (isHttps)
+                throw new Exception(HTTPS_ERROR);
             await SignalRService.StartConnectionAsync(host, port, password);
             CloseAlert();
         }
@@ -195,13 +208,21 @@
 
     private void OnPaintSurface(SKPaintSurfaceEventArgs args)
     {
-        var filteredLoot = SignalRService.Data?.Loot?.Where(loot => LootFilter.MatchesFilter(loot)) 
+        var filteredLoot = SignalRService.Data?.Loot?.Where(loot => LootFilter.MatchesFilter(loot))
                               ?? Enumerable.Empty<WebRadarLoot>();
 
         RadarService.Render(args, name, panOffsetX, panOffsetY, filteredLoot, LootFilter);
+        StateHasChanged();
     }
 
-
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await SignalRService.StopConnectionAsync();
+        }
+        catch { }
+    }
 
     private void OnMouseWheel(WheelEventArgs e)
     {
@@ -237,12 +258,4 @@
         isDragging = false;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        try
-        {
-            await SignalRService.StopConnectionAsync();
-        }
-        catch { }
-    }
 }

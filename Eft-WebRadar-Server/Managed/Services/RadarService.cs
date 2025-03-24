@@ -4,14 +4,23 @@ using SkiaSharp;
 using SkiaSharp.Views.Blazor;
 using System.Collections.Frozen;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO.Compression;
 using System.Numerics;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace AncientMountain.Managed.Services
 {
+    public class ESPUiConfig()
+    {
+        public int ScreenWidth { get; set; } = 2560;
+        public int ScreenHeight { get; set; } = 1440;
+        public float FOV { get; set; } = 70f;
+    }
+
     public sealed class RadarService
     {
         /// <summary>
@@ -32,9 +41,12 @@ namespace AncientMountain.Managed.Services
             { "Sandbox", "Ground Zero" },
             { "Sandbox_high", "Ground Zero" }
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+        public static ESPUiConfig espUiConfig { get; set; } = new ESPUiConfig();
+        public static IEnumerable<WebRadarLoot> filteredLoot { get; set; }
+        public static IEnumerable<string> playerNames { get; set; }
+
         private static float _scale = 1f;
-        private static Vector3 localPlayerMapPos;
-        private static bool localPlayerPosGot = false;
         /// <summary>
         /// Radar UI Scale Value.
         /// </summary>
@@ -49,6 +61,7 @@ namespace AncientMountain.Managed.Services
         }
         /// <summary>
         /// Radar UI Zoom Value.
+        /// *Be Sure to Invert this value before usage*
         /// </summary>
         private static float _zoom = 1f; // Default zoom level
         public static float Zoom
@@ -56,6 +69,7 @@ namespace AncientMountain.Managed.Services
             get => _zoom;
             set => _zoom = Math.Clamp(value, 0.5f, 3.5f); // Prevent extreme zoom
         }
+
         private readonly SignalRService _sr;
         private readonly FrozenDictionary<string, Map> _maps;
 
@@ -64,37 +78,14 @@ namespace AncientMountain.Managed.Services
             _sr = sr;
             LoadMaps(ref _maps);
         }
-        private SKPoint _mousePosition = new SKPoint(0, 0); 
-        public IEnumerable<WebRadarLoot> FilteredLoot { get; set; } = Enumerable.Empty<WebRadarLoot>();
+        private SKPoint _mousePosition = new SKPoint(0, 0);
 
         public void Render(SKPaintSurfaceEventArgs args, string localPlayerName, float panX, float panY, IEnumerable<WebRadarLoot> filteredLoot, LootFilterService lootFilter)
         {
             var info = args.Info;
             var canvas = args.Surface.Canvas;
             canvas.Clear(SKColors.Black);
-            if (localPlayerPosGot)
-            {
-                float centerX = info.Width / 2f;
-                float centerY = info.Height / 2f;
-            
-                float adjustedX = centerX - (localPlayerMapPos.X * Zoom) + panX;
-                float adjustedY = centerY - (localPlayerMapPos.Y * Zoom) + panY;
-            
-                canvas.Translate(adjustedX, adjustedY);
-            }     
 
-            var input = SignalRService.GetMouseInput();
-            if (input.ScrollDelta != 0 && localPlayerPosGot)
-            {
-                // Save old zoom level before change
-                float oldZoom = Zoom;
-                Zoom = Math.Clamp(Zoom + input.ScrollDelta * 0.2f, 0.5f, 3.5f);
-
-                // Calculate new pan offsets to center player when zooming
-                float zoomFactor = Zoom / oldZoom;
-                panX = (panX - localPlayerMapPos.X) * zoomFactor + localPlayerMapPos.X;
-                panY = (panY - localPlayerMapPos.Y) * zoomFactor + localPlayerMapPos.Y;
-            } 
             try
             {
                 switch (_sr.ConnectionState)
@@ -104,28 +95,46 @@ namespace AncientMountain.Managed.Services
                         break;
                     case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connected:
                         var data = _sr.Data;
-                        if (data is not null && data.InGame && data.MapID is string mapID)
+                        if (false) //Leaving for debug purposes
                         {
+                            var corner = new SKPoint(info.Rect.Left, info.Rect.Top);
+                            corner.Offset(0, 12 * RadarService.Scale);
+                            canvas.DrawText($"{(DateTime.UtcNow - data?.SendTime)?.TotalMilliseconds:0.0}ms", corner, SKPaints.TextLoot);
+                        }
+
+                        if (data is not null &&
+                            data.InGame &&
+                            data.MapID is string mapID)
+                        {                            
                             if (!_maps.TryGetValue(mapID, out var map))
                                 map = _maps["default"];
-
                             var localPlayer = data.Players.FirstOrDefault(x => x.Name?.Equals(localPlayerName, StringComparison.OrdinalIgnoreCase) ?? false);
                             localPlayer ??= data.Players.FirstOrDefault();
                             if (localPlayer is null)
                                 break;
-
-                            var localPlayerMapPos = localPlayer.Position.ToMapPos(map);
-                            localPlayerPosGot = true;
-                            var mapParams = GetMapParameters(info, map, localPlayerMapPos, panX, panY);
-                            var mapCanvasBounds = new SKRect(info.Rect.Left, info.Rect.Top, info.Rect.Right, info.Rect.Bottom);
+                            var localPlayerPos = localPlayer.Position;
+                            var localPlayerMapPos = localPlayerPos.ToMapPos(map);
+                            var mapParams = GetMapParameters(info, map, localPlayerMapPos); // Map auto follow LocalPlayer
+                            var mapCanvasBounds = new SKRect() // Drawing Destination
+                            {
+                                Left = info.Rect.Left,
+                                Right = info.Rect.Right,
+                                Top = info.Rect.Top,
+                                Bottom = info.Rect.Bottom
+                            };
+                            // Draw Game Map
                             canvas.DrawImage(map.Image, mapParams.Bounds, mapCanvasBounds, SKPaints.PaintBitmap);
-
+                            // Draw LocalPlayer
                             localPlayer.Draw(canvas, info, mapParams, localPlayer, _mousePosition);
 
-                            foreach (var player in data.Players.Where(x => !x.HasExfild && x != localPlayer))
+                            // Draw other players
+                            var allPlayers = data.Players.Where(x => !x.HasExfild && x != localPlayer);
+                            foreach (var player in allPlayers)
                             {
                                 player.Draw(canvas, info, mapParams, localPlayer, _mousePosition);
                             }
+
+                            playerNames = data.Players.Where(x => x.Type == WebPlayerType.LocalPlayer || x.Type == WebPlayerType.Player || x.Type == WebPlayerType.Teammate).Select(x => x.Name);
 
                             if (filteredLoot is not null)
                             {
@@ -150,9 +159,86 @@ namespace AncientMountain.Managed.Services
                         break;
                 }
             }
-            catch {}      
+            catch { }
+
             canvas.Flush();
         }
+
+        public void RenderESP(SKPaintSurfaceEventArgs args, string localPlayerName, IEnumerable<WebRadarLoot> filteredLoot)
+        {
+            var info = args.Info;
+            var canvas = args.Surface.Canvas;
+            canvas.Clear(SKColors.Black);
+
+            try
+            {
+                switch (_sr.ConnectionState)
+                {
+                    case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Disconnected:
+                        NotConnectedStatus(canvas, info, "ESP");
+                        break;
+                    case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connected:
+                        var data = _sr.Data;
+                        if (data is not null &&
+                            data.InGame &&
+                            data.MapID is string mapID)
+                        {
+                            if (!_maps.TryGetValue(mapID, out var map))
+                                map = _maps["default"];
+                            var localPlayer = data.Players.FirstOrDefault(x => x.Name?.Equals(localPlayerName, StringComparison.OrdinalIgnoreCase) ?? false);
+                            localPlayer ??= data.Players.FirstOrDefault();
+                            if (localPlayer is null)
+                                break;
+
+                            if (filteredLoot is not null)
+                            {
+                                foreach (var lootItem in filteredLoot)
+                                {
+                                    if (lootItem.ShortName.StartsWith("Q_"))
+                                        continue;
+                                    lootItem.DrawESP(canvas, localPlayer, espUiConfig);
+                                }
+                            }
+
+                            var allPlayers = data.Players.Where(x => !x.HasExfild);
+                            playerNames = allPlayers.Where(x => x.Type == WebPlayerType.LocalPlayer || x.Type == WebPlayerType.Player || x.Type == WebPlayerType.Teammate).Select(x => x.Name);
+
+                            //Players and items show at weird height (if on the ground or laying down, shows weird)
+                            DrawLoot(canvas, localPlayer, filteredLoot);
+                            foreach (var p in allPlayers)
+                            {
+                                p.DrawESP(canvas, localPlayer, espUiConfig);
+                            }
+                        } else
+                        {
+                            WaitingForRaidStatus(canvas, info);
+                        }
+                        break;
+                    case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connecting:
+                        ConnectingStatus(canvas, info);
+                        break;
+                    case Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Reconnecting:
+                        ReConnectingStatus(canvas, info);
+                        break;
+                }
+            }
+            catch { }
+
+            canvas.Flush();
+        }
+
+        private static void DrawLoot(SKCanvas canvas, WebRadarPlayer localPlayer, IEnumerable<WebRadarLoot> loot)
+        {
+            if (loot is not null)
+            {
+                foreach (var item in loot)
+                {
+                    //Add UILootConfig
+                    item.DrawESP(canvas, localPlayer, espUiConfig);
+                }
+            }
+        }
+
         /// <summary>
         /// Retrieves the currently active map from SignalR data.
         /// </summary>
@@ -171,6 +257,7 @@ namespace AncientMountain.Managed.Services
         {
             _mousePosition = position;
         }
+
         private readonly Stopwatch _statusSw = Stopwatch.StartNew();
         private int _statusOrder = 1;
 
@@ -186,14 +273,15 @@ namespace AncientMountain.Managed.Services
             }
         }
 
-        private void NotConnectedStatus(SKCanvas canvas, SKImageInfo info)
+        private void NotConnectedStatus(SKCanvas canvas, SKImageInfo info, string page = "")
         {
-            const string notConnected = "Not Connected!";
+            var notConnected = "Not Connected!" + page;
             float textWidth = SKPaints.TextRadarStatus.MeasureText(notConnected);
             canvas.DrawText(notConnected, (info.Width / 2) - textWidth / 2f, info.Height / 2,
                 SKPaints.TextRadarStatus);
             IncrementStatus();
         }
+
         private void WaitingForRaidStatus(SKCanvas canvas, SKImageInfo info)
         {
             const string waitingFor1 = "Waiting for Raid Start.";
@@ -207,6 +295,7 @@ namespace AncientMountain.Managed.Services
                 SKPaints.TextRadarStatus);
             IncrementStatus();
         }
+
         private void ConnectingStatus(SKCanvas canvas, SKImageInfo info)
         {
             const string connecting1 = "Connecting.";
@@ -238,31 +327,24 @@ namespace AncientMountain.Managed.Services
         /// <summary>
         /// Provides miscellaneous map parameters used throughout the entire render.
         /// </summary>
-        private static MapParameters GetMapParameters(SKImageInfo skInfo, Map currentMap, Vector3 localPlayerMapPos, float panX, float panY)
+        private static MapParameters GetMapParameters(SKImageInfo skInfo, Map currentMap, Vector3 localPlayerMapPos)
         {
-            float zoom = Math.Clamp(Zoom, 0.5f, 3.5f);
+            float zoom = 2.01f - Zoom; // Invert zoom value
+            var zoomWidth = currentMap.Image.Width * zoom;
+            var zoomHeight = currentMap.Image.Height * zoom;
 
-            float mapWidth = currentMap.Image.Width * zoom;
-            float mapHeight = currentMap.Image.Height * zoom;
+            var bounds = new SKRect(localPlayerMapPos.X - zoomWidth / 2,
+                    localPlayerMapPos.Y - zoomHeight / 2,
+                    localPlayerMapPos.X + zoomWidth / 2,
+                    localPlayerMapPos.Y + zoomHeight / 2)
+                .AspectFill(skInfo.Size);
 
-            // Adjusted for panning
-            float left = -mapWidth / 2f + skInfo.Width / 2f;
-            float top = -mapHeight / 2f + skInfo.Height / 2f;
-            float right = mapWidth / 2f + skInfo.Width / 2f;
-            float bottom = mapHeight / 2f + skInfo.Height / 2f;
-            var bounds = new SKRect(
-                localPlayerMapPos.X - mapWidth / 2,
-                localPlayerMapPos.Y - mapHeight / 2,
-                localPlayerMapPos.X + mapWidth / 2,
-                localPlayerMapPos.Y + mapHeight / 2
-            );
             return new MapParameters
             {
                 Map = currentMap,
-                //Bounds = new SKRect(left, top, right, bottom),
                 Bounds = bounds,
-                XScale = skInfo.Width / mapWidth,
-                YScale = skInfo.Height / mapHeight
+                XScale = skInfo.Width / bounds.Width, // Set scale for this frame
+                YScale = skInfo.Height / bounds.Height // Set scale for this frame
             };
         }
 

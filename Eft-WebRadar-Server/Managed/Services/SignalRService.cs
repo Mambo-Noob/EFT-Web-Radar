@@ -2,6 +2,7 @@
 using AncientMountain.Managed.MessagePack;
 using MessagePack;
 using Microsoft.AspNetCore.SignalR.Client;
+using System.Diagnostics;
 
 namespace AncientMountain.Managed.Services
 {
@@ -27,10 +28,11 @@ namespace AncientMountain.Managed.Services
             this.Data = data;
             return Task.CompletedTask;
         }
+
         private static float _scrollDelta = 0;
         private static float _mouseX = 0;
         private static float _mouseY = 0;
-    
+
         /// <summary>
         /// Gets the latest mouse input, including scroll and position.
         /// </summary>
@@ -43,7 +45,7 @@ namespace AncientMountain.Managed.Services
                 MouseY = _mouseY
             };
         }
-    
+
         /// <summary>
         /// Called when the mouse scrolls.
         /// </summary>
@@ -51,7 +53,7 @@ namespace AncientMountain.Managed.Services
         {
             _scrollDelta = delta;
         }
-    
+
         /// <summary>
         /// Called when the mouse moves.
         /// </summary>
@@ -60,13 +62,14 @@ namespace AncientMountain.Managed.Services
             _mouseX = x;
             _mouseY = y;
         }
-    
+
         public class MouseInput
         {
             public float ScrollDelta { get; set; }
             public float MouseX { get; set; }
             public float MouseY { get; set; }
         }
+
         /// <summary>
         /// Start the SignalR connection.
         /// </summary>

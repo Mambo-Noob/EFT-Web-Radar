@@ -20,6 +20,8 @@ namespace AncientMountain.Managed.Services
         public bool ShowMeds { get; set; } = true;
         public bool ShowBackpacks { get; set; } = true;
         public string LootSearchQuery { get; set; } = "";
+        public HashSet<string> ExcludedItems { get; set; } = new HashSet<string>();
+        public string SelectedItemId { get; set; }
 
         public bool MatchesFilter(WebRadarLoot loot)
         {
@@ -28,11 +30,19 @@ namespace AncientMountain.Managed.Services
                 return true;
 
             // ✅ Apply filtering for other loot
-            return loot.Price >= LootPriceFilter &&
+            return loot.Price >= LootPriceFilter && !ExcludedItems.Contains(loot.Id) &&
                    (string.IsNullOrEmpty(LootSearchQuery) || loot.ShortName.Contains(LootSearchQuery, StringComparison.OrdinalIgnoreCase));
         }
 
         public bool IsImportantLoot(WebRadarLoot loot) => loot.Price >= ImportantLootPriceFilter;
+
+        public void ResetFilters()
+        {
+            ExcludedItems.Clear();
+            LootPriceFilter = 50000;
+            LootSearchQuery = string.Empty;
+            ImportantLootPriceFilter = 200000;
+        }
 
         // ✅ Load settings when the service initializes
         public async Task LoadSettingsAsync()
