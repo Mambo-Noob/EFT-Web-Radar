@@ -2,12 +2,14 @@
 using AncientMountain.Managed.Skia;
 using MessagePack;
 using SkiaSharp;
+using System;
+using System.Drawing;
 using System.Numerics;
 
 namespace AncientMountain.Managed.Data
 {
     [MessagePackObject]
-    public sealed class WebRadarPlayer
+    public sealed class WebRadarPlayer : IEntity
     {
         /// <summary>
         /// Player Name.
@@ -39,11 +41,7 @@ namespace AncientMountain.Managed.Data
         /// </summary>
         [Key(5)]
         public System.Numerics.Vector2 Rotation { get; init; }
-        /// <summary>
-        /// Player Value.
-        /// </summary>
-        [Key(6)]
-        public int Value { get; init; }
+        [Key(6)] public int Value { get; init; }
         [Key(7)] public string PrimaryWeapon { get; init; }
         [Key(8)] public string SecondaryWeapon { get; init; }
         [Key(9)] public string Armor { get; init; }
@@ -52,6 +50,8 @@ namespace AncientMountain.Managed.Data
         [Key(12)] public string Rig { get; init; }
         [Key(13)] public float KD { get; init; }
         [Key(14)] public float TotalHoursPlayed { get; init; }
+        [Key(15)] public bool IsAiming { get; init; }
+        [Key(16)] public float ZoomLevel { get; init; }
         /// <summary>
         /// Player has exfil'd/left the raid.
         /// </summary>
@@ -75,7 +75,7 @@ namespace AncientMountain.Managed.Data
             }
         }
         [IgnoreMember]
-        public bool IsHovered { get; set; } // ✅ Track hover state
+        public bool IsHovered { get; set; }
 
         public void Draw(SKCanvas canvas, SKImageInfo info, RadarService.MapParameters mapParams, WebRadarPlayer localPlayer, SKPoint mousePosition)
         {
@@ -101,7 +101,7 @@ namespace AncientMountain.Managed.Data
                 }
 
                 // 🟢 Draw the player marker
-                DrawPlayerMarker(canvas, point, markerPaint);
+                DrawPlayerMarker(canvas, point, markerPaint, localPlayer);
 
                 // 👤 Skip drawing name for local player
                 if (this == localPlayer)
@@ -117,10 +117,8 @@ namespace AncientMountain.Managed.Data
                     $"H: {(int)Math.Round(height)} D: {(int)Math.Round(dist)}"
                 };
 
-                // 📝 Draw Player Text
                 DrawPlayerText(canvas, localPlayer, point, lines);
 
-                // 🏷️ Show extra gear info when hovered
                 if (IsHovered)
                     DrawGearInfo(canvas, mousePosition);
             }
@@ -130,10 +128,8 @@ namespace AncientMountain.Managed.Data
             }
         }
 
-
         private void DrawGearInfo(SKCanvas canvas, SKPoint position)
         {
-            // ✅ Define the gear text
             var lines = new List<string>
             {
                 $"🎯 {this.Name}",
@@ -153,9 +149,9 @@ namespace AncientMountain.Managed.Data
             float maxWidth = lines.Max(line => SKPaints.TextBasic.MeasureText(line)) + padding * 2;
 
             SKRect backgroundRect = new SKRect(
-                position.X, 
-                position.Y, 
-                position.X + maxWidth, 
+                position.X,
+                position.Y,
+                position.X + maxWidth,
                 position.Y + textHeight
             );
 
@@ -189,6 +185,28 @@ namespace AncientMountain.Managed.Data
             }
         }
 
+        public void DrawESP(SKCanvas canvas, WebRadarPlayer localPlayer, ESPUiConfig espConfig)
+        {
+            var corner = new SKPoint(0, 0);
+            corner.Offset(0, 12 * RadarService.Scale);
+            canvas.DrawText($"{localPlayer.ZoomLevel} || {localPlayer.IsAiming}", corner, SKPaints.PaintDeathMarker);
+            var distance = Vector3.Distance(localPlayer.Position, Position);
+            if (distance > 500)
+            {
+                return;
+            }
+
+            if (this.HasExfild || !ScreenPositionCalculator.WorldToScreenPositionOnEnemyView(out var point, this, localPlayer, espConfig.ScreenWidth,
+                espConfig.ScreenHeight, espConfig.FOV, localPlayer.ZoomLevel > 0f ? localPlayer.ZoomLevel : 1f))
+            {
+                return;
+            }
+
+            var paints = GetPaints(localPlayer);
+
+            canvas.DrawCircle(point, RadarService.Scale, paints.Item1);
+            canvas.DrawText($"{Name} - {distance.ToString("n2")}m", point, paints.Item2);
+        }
 
         /// <summary>
         /// Draws Player Text on this location.
@@ -207,29 +225,31 @@ namespace AncientMountain.Managed.Data
                 canvas.DrawText(line, point, paints.Item2); // draw line text
                 point.Offset(0, 12 * RadarService.Scale);
             }
+            if (IsAiming)
+            {
+                canvas.DrawText("Aiming", point, SKPaints.TextOutline); // Draw outline
+                canvas.DrawText("Aiming", point, paints.Item2); // draw line text
+            }
         }
 
         /// <summary>
         /// Draws a Player Marker on this location.
         /// </summary>
-        private void DrawPlayerMarker(SKCanvas canvas, SKPoint point, SKPaint markerPaint)
+        private void DrawPlayerMarker(SKCanvas canvas, SKPoint point, SKPaint markerPaint, WebRadarPlayer localPlayer)
         {
+            var heightDiff = Position.Y - localPlayer.Position.Y;
             float size = 6 * RadarService.Scale;
-            
-            // 🔘 Draw Player Marker
+
             canvas.DrawCircle(point, size, SKPaints.ShapeOutline); // Draw outline
-            canvas.DrawCircle(point, size, markerPaint); // Draw player marker
-        
-            // 🎯 Draw Aim Line
+            canvas.DrawCircle(point, size, markerPaint);
+
             var radians = MapRotation.ToRadians();
             int aimlineLength = 15;
             var aimlineEnd = GetAimlineEndpoint(point, radians, aimlineLength);
-        
+
             canvas.DrawLine(point, aimlineEnd, SKPaints.ShapeOutline);
             canvas.DrawLine(point, aimlineEnd, markerPaint);
         }
-
-
 
         /// <summary>
         /// Gets the point where the Aimline 'Line' ends. Applies UI Scaling internally.
@@ -255,10 +275,13 @@ namespace AncientMountain.Managed.Data
 
         private ValueTuple<SKPaint, SKPaint> GetPaints(WebRadarPlayer localPlayer)
         {
+            if (this == localPlayer)
+                return new ValueTuple<SKPaint, SKPaint>(SKPaints.PaintLocalPlayer, SKPaints.TextLocalPlayer);
+
             // If the player is an AI (Bot), determine their type based on name
             if (this.Type == WebPlayerType.Bot)
             {
-                var playerType = PlayerColorManager.GetPlayerType(this.Name); // ✅ Check name-based type
+                var playerType = PlayerColorManager.GetPlayerType(this.Name);
 
                 return playerType switch
                 {

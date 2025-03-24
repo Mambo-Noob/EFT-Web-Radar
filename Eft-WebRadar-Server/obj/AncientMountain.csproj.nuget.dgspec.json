@@ -1,23 +1,23 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\huber\\OneDrive\\Documents\\EFtWebRadar\\AncientMountain.csproj": {}
+    "C:\\Users\\andpp\\code\\eft-webradar\\AncientMountain.csproj": {}
   },
   "projects": {
-    "C:\\Users\\huber\\OneDrive\\Documents\\EFtWebRadar\\AncientMountain.csproj": {
+    "C:\\Users\\andpp\\code\\eft-webradar\\AncientMountain.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\huber\\OneDrive\\Documents\\EFtWebRadar\\AncientMountain.csproj",
+        "projectUniqueName": "C:\\Users\\andpp\\code\\eft-webradar\\AncientMountain.csproj",
         "projectName": "AncientMountain",
-        "projectPath": "C:\\Users\\huber\\OneDrive\\Documents\\EFtWebRadar\\AncientMountain.csproj",
-        "packagesPath": "C:\\Users\\huber\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\huber\\OneDrive\\Documents\\EFtWebRadar\\obj\\",
+        "projectPath": "C:\\Users\\andpp\\code\\eft-webradar\\AncientMountain.csproj",
+        "packagesPath": "C:\\Users\\andpp\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\andpp\\code\\eft-webradar\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\huber\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\andpp\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
@@ -26,7 +26,6 @@
         ],
         "sources": {
           "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
-          "C:\\Program Files\\dotnet\\library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -68,21 +67,29 @@
               "target": "Package",
               "version": "[9.0.0, )"
             },
+            "Microsoft.Extensions.Logging.Console": {
+              "target": "Package",
+              "version": "[9.0.2, )"
+            },
             "Microsoft.NET.ILLink.Tasks": {
               "suppressParent": "All",
               "target": "Package",
-              "version": "[8.0.14, )",
+              "version": "[8.0.13, )",
               "autoReferenced": true
             },
             "Microsoft.NET.Sdk.WebAssembly.Pack": {
               "suppressParent": "All",
               "target": "Package",
-              "version": "[9.0.3, )",
+              "version": "[9.0.2, )",
               "autoReferenced": true
             },
             "SkiaSharp.Views.Blazor": {
               "target": "Package",
               "version": "[2.88.9, )"
+            },
+            "System.Text.Json": {
+              "target": "Package",
+              "version": "[9.0.2, )"
             }
           },
           "imports": [
@@ -101,7 +108,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.201/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.200/PortableRuntimeIdentifierGraph.json"
         }
       },
       "runtimes": {

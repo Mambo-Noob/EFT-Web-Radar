@@ -55,7 +55,9 @@
 		<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.11" PrivateAssets="all" />
 		<PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.11" />
 		<PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" Version="9.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.2" />
 		<PackageReference Include="SkiaSharp.Views.Blazor" Version="2.88.9" />
+		<PackageReference Include="System.Text.Json" Version="9.0.2" />
 	</ItemGroup>
 
 </Project>

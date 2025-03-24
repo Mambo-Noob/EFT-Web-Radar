@@ -1,4 +1,4 @@
-using AncientMountain.Managed.Services;
+﻿using AncientMountain.Managed.Services;
 using AncientMountain.Managed.Skia;
 using MessagePack;
 using SkiaSharp;
@@ -7,23 +7,43 @@ using System.Numerics;
 namespace AncientMountain.Managed.Data
 {
     [MessagePackObject]
-    public sealed class WebRadarLoot
+    public readonly struct WebRadarLoot : IEntity
     {
+        [IgnoreMember]
+        public readonly string Id => $"{ShortName}-{Position.ToString()}";
+        /// <summary>
+        /// Item's Short Name.
+        /// </summary>
         [Key(0)]
-        public string ShortName { get; init; }
+        public readonly string ShortName { get; init; }
 
+        /// <summary>
+        /// Item's Price (Roubles).
+        /// </summary>
         [Key(1)]
-        public int Price { get; init; }
+        public readonly int Price { get; init; }
 
+        /// <summary>
+        /// Item's Position.
+        /// </summary>
         [Key(2)]
-        public Vector3 Position { get; init; }
+        public readonly Vector3 Position { get; init; }
 
+        /// <summary>
+        /// Item is Meds.
+        /// </summary>
         [Key(3)]
         public bool IsMeds { get; init; }
 
+        /// <summary>
+        /// Item is Food.
+        /// </summary>
         [Key(4)]
         public bool IsFood { get; init; }
 
+        /// <summary>
+        /// Item is Backpack.
+        /// </summary>
         [Key(5)]
         public bool IsBackpack { get; init; }
 
@@ -32,8 +52,8 @@ namespace AncientMountain.Managed.Data
             try
             {
                 // 🚨 Ignore loot if filters are disabled
-                if ((!lootFilter.ShowFood && IsFood) || 
-                    (!lootFilter.ShowMeds && IsMeds) || 
+                if ((!lootFilter.ShowFood && IsFood) ||
+                    (!lootFilter.ShowMeds && IsMeds) ||
                     (!lootFilter.ShowBackpacks && IsBackpack))
                 {
                     return; // Do not render this loot
@@ -51,8 +71,13 @@ namespace AncientMountain.Managed.Data
 
                 var label = $"{Name} [{AdjustedPrice}K]";
 
-                DrawLootMarker(canvas, point, Price, lootFilter);
-                DrawLootText(canvas, point, label);
+                DrawLootMarker(canvas, point, localPlayer, Price, lootFilter);
+                DrawLootText(canvas, point, label, lootFilter);
+
+                if (lootFilter.SelectedItemId == this.Id)
+                {
+                    canvas.DrawLineToPOI(localPlayer, mapParams, point);
+                }
             }
             catch
             {
@@ -60,40 +85,64 @@ namespace AncientMountain.Managed.Data
             }
         }
 
-
-        private void DrawLootMarker(SKCanvas canvas, SKPoint point, int price, LootFilterService lootFilter)
+        private void DrawLootMarker(SKCanvas canvas, SKPoint point, WebRadarPlayer localPlayer, int price, LootFilterService lootFilter)
         {
+            var heightDiff = Position.Y - localPlayer.Position.Y;
             var size = 4 * RadarService.Scale;
-            canvas.DrawCircle(point, size, SKPaints.ShapeOutline);
-        
-            // 🚨 Stop drawing if filter is off
+
             if (!lootFilter.ShowBackpacks && IsBackpack) return;
-        
-            // 🟢 Draw Food, Meds, and Backpacks (if enabled)
+
             if (lootFilter.ShowFood && IsFood || lootFilter.ShowMeds && IsMeds || lootFilter.ShowBackpacks && IsBackpack)
             {
-                canvas.DrawCircle(point, size, SKPaints.PaintLootFMB);
+                canvas.CanvasDrawIndicator(SKPaints.PaintLootFMB, heightDiff, point, size);
                 return;
             }
-        
-            // 🔴 Highlight Important Loot
+
             if (lootFilter.IsImportantLoot(this))
             {
-                canvas.DrawCircle(point, size, SKPaints.PaintLootImportant);
-            }
-            else
+                canvas.CanvasDrawIndicator(SKPaints.PaintLootImportant, heightDiff, point, size);
+            } else
             {
-                canvas.DrawCircle(point, size, SKPaints.PaintLoot);
+                canvas.CanvasDrawIndicator(SKPaints.PaintLoot, heightDiff, point, size);
             }
         }
 
-
-
-        private void DrawLootText(SKCanvas canvas, SKPoint point, string label)
+        private void DrawLootText(SKCanvas canvas, SKPoint point, string label, LootFilterService lootFilter)
         {
             point.Offset(9 * RadarService.Scale, 3 * RadarService.Scale);
             canvas.DrawText(label, point, SKPaints.TextOutline);
-            canvas.DrawText(label, point, SKPaints.TextLoot);
+            canvas.DrawText(label, point, lootFilter.IsImportantLoot(this) ? SKPaints.TextImportantLoot : SKPaints.TextLoot);
+        }
+
+        public void DrawESP(SKCanvas canvas, WebRadarPlayer localPlayer, ESPUiConfig espConfig)
+        {
+            var distance = Vector3.Distance(localPlayer.Position, Position);
+            if (distance > 200)
+            {
+                return;
+            }
+            if (!ScreenPositionCalculator.WorldToScreenPositionOnEnemyView(out var point, this, localPlayer, espConfig.ScreenWidth, espConfig.ScreenHeight,
+                espConfig.FOV, localPlayer.ZoomLevel > 0f ? localPlayer.ZoomLevel : 1f))
+            {
+                return;
+            }
+
+            var paints = GetPaints();
+
+            canvas.DrawCircle(point, RadarService.Scale, paints.Item1);
+            //Make this more like local radar
+            canvas.DrawText($"{ShortName} - {Price} - {distance.ToString("n2")}m", point, paints.Item2);
+        }
+
+        //Fix this after mambo merge
+        private ValueTuple<SKPaint, SKPaint> GetPaints()
+        {
+            if (Price >  200000)
+            {
+                return new(SKPaints.PaintLootImportant, SKPaints.TextImportantLoot);
+            }
+            //Add more to this
+            return new(SKPaints.PaintLoot, SKPaints.TextLoot);
         }
     }
 }
