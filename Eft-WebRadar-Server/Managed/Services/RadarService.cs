@@ -39,12 +39,15 @@ namespace AncientMountain.Managed.Services
             { "lighthouse", "Lighthouse" },
             { "tarkovstreets", "Streets" },
             { "Sandbox", "Ground Zero" },
-            { "Sandbox_high", "Ground Zero" }
+            { "Sandbox_high", "Ground Zero" },
+            { "Labyrinth", "Labyrinth" }
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         public static ESPUiConfig espUiConfig { get; set; } = new ESPUiConfig();
         public static IEnumerable<WebRadarLoot> filteredLoot { get; set; }
         public static IEnumerable<string> playerNames { get; set; }
+        public Map CurrentMap { get; set; }
+        public Vector3 PlayerLocation { get; set; }
 
         private static float _scale = 1f;
         /// <summary>
@@ -80,7 +83,8 @@ namespace AncientMountain.Managed.Services
         }
         private SKPoint _mousePosition = new SKPoint(0, 0);
 
-        public void Render(SKPaintSurfaceEventArgs args, string localPlayerName, float panX, float panY, IEnumerable<WebRadarLoot> filteredLoot, LootFilterService lootFilter)
+        public void Render(SKPaintSurfaceEventArgs args, string localPlayerName, float panX, float panY,
+            IEnumerable<WebRadarLoot> filteredLoot, LootFilterService lootFilter)
         {
             var info = args.Info;
             var canvas = args.Surface.Canvas;
@@ -108,6 +112,8 @@ namespace AncientMountain.Managed.Services
                         {                            
                             if (!_maps.TryGetValue(mapID, out var map))
                                 map = _maps["default"];
+
+                            CurrentMap = map;
                             var localPlayer = data.Players.FirstOrDefault(x => x.Name?.Equals(localPlayerName, StringComparison.OrdinalIgnoreCase) ?? false);
                             localPlayer ??= data.Players.FirstOrDefault();
                             if (localPlayer is null)
@@ -126,6 +132,7 @@ namespace AncientMountain.Managed.Services
                             canvas.DrawImage(map.Image, mapParams.Bounds, mapCanvasBounds, SKPaints.PaintBitmap);
                             // Draw LocalPlayer
                             localPlayer.Draw(canvas, info, mapParams, localPlayer, _mousePosition);
+                            PlayerLocation = localPlayer.Position;
 
                             // Draw other players
                             var allPlayers = data.Players.Where(x => !x.HasExfild && x != localPlayer);
